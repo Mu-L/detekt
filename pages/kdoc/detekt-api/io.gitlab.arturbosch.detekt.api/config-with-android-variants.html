@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="">
 <meta name="keywords" content=" ">
-<title>visit - | A static code analyzer for Kotlin</title>
+<title>configWithAndroidVariants | A static code analyzer for Kotlin</title>
 <link rel="stylesheet" href="/detekt/css/syntax.css">
 
 <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -148,7 +148,7 @@
                                 searchInput: document.getElementById('search-input'),
                                 resultsContainer: document.getElementById('results-container'),
                                 dataSource: '/detekt/search.json',
-                                searchResultTemplate: '<li><a href="{url}" title="visit -">{title}</a></li>',
+                                searchResultTemplate: '<li><a href="{url}" title="configWithAndroidVariants">{title}</a></li>',
                     noResultsText: 'No results found.',
                             limit: 10,
                             fuzzy: true,
@@ -420,7 +420,7 @@
         <!-- Content Column -->
         <div class="col-md-9" id="tg-sb-content">
             <div class="post-header">
-   <h1 class="post-title-main">visit -</h1>
+   <h1 class="post-title-main">configWithAndroidVariants</h1>
 </div>
 
 
@@ -457,22 +457,76 @@ $('#toc').on('click', 'a', function() {
 
     
 
-    <a target="_blank" href="https://github.com/detekt/detekt/tree/main/docs/pages//pages/kdoc/detekt-api/io.gitlab.arturbosch.detekt.api.internal/-base-rule/visit.md" class="btn btn-default githubEditButton" role="button"><i class="fa fa-github fa-lg"></i> Edit me</a>
+    <a target="_blank" href="https://github.com/detekt/detekt/tree/main/docs/pages//pages/kdoc/detekt-api/io.gitlab.arturbosch.detekt.api/config-with-android-variants.md" class="btn btn-default githubEditButton" role="button"><i class="fa fa-github fa-lg"></i> Edit me</a>
 
     
 
 
     
 
-  <p>//<a href="/detekt/pages/kdoc/">detekt-api</a>/<a href="/detekt/pages/kdoc/detekt-api/io.gitlab.arturbosch.detekt.api.internal/">io.gitlab.arturbosch.detekt.api.internal</a>/<a href="/detekt/pages/kdoc/detekt-api/io.gitlab.arturbosch.detekt.api.internal/-base-rule/">BaseRule</a>/<a href="/detekt/pages/kdoc/detekt-api/io.gitlab.arturbosch.detekt.api.internal/-base-rule/visit.html">visit</a></p>
+  <p>//<a href="../../index.html">detekt-api</a>/<a href="index.html">io.gitlab.arturbosch.detekt.api</a>/<a href="config-with-android-variants.html">configWithAndroidVariants</a></p>
 
-<h1 id="visit">visit</h1>
+<h1 id="configwithandroidvariants">configWithAndroidVariants</h1>
+
 <p>[jvm]<br />
-Content<br />
-open fun <a href="/detekt/pages/kdoc/detekt-api/io.gitlab.arturbosch.detekt.api.internal/-base-rule/visit.html">visit</a>(root: KtFile)<br />
-More info</p>
+fun &lt;<a href="config-with-android-variants.html">T</a> : <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a>&gt; <a href="config-with-android-variants.html">configWithAndroidVariants</a>(defaultValue: <a href="config-with-android-variants.html">T</a>, defaultAndroidValue: <a href="config-with-android-variants.html">T</a>): <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.properties/-read-only-property/index.html">ReadOnlyProperty</a>&lt;<a href="-config-aware/index.html">ConfigAware</a>, <a href="config-with-android-variants.html">T</a>&gt;</p>
 
-<p>Init function to start visiting the KtFile. Can be overridden to start a different visiting process.</p>
+<p>Creates a delegated read-only property that can be used in <a href="-config-aware/index.html">ConfigAware</a> objects. The name of the property is the key that is used during configuration lookup. The value of the property is evaluated only once.</p>
+
+<h2 id="parameters">Parameters</h2>
+
+<p>jvm</p>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th> </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>defaultValue</td>
+      <td>the value that the property evaluates to when there is no key with the name of the property in the config. Although <a href="config-with-android-variants.html">T</a> is defined as <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a>, only <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a>, <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-int/index.html">Int</a>, <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-boolean/index.html">Boolean</a> and List are supported.</td>
+    </tr>
+    <tr>
+      <td>defaultAndroidValue</td>
+      <td>the value that the property evaluates to when there is no key with the name of the property in the config and there is a configuration property in the rule set named “android” that is set to <code>true</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>[jvm]<br />
+fun &lt;<a href="config-with-android-variants.html">T</a> : <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a>, <a href="config-with-android-variants.html">U</a> : <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a>&gt; <a href="config-with-android-variants.html">configWithAndroidVariants</a>(defaultValue: <a href="config-with-android-variants.html">T</a>, defaultAndroidValue: <a href="config-with-android-variants.html">T</a>, transformer: (<a href="config-with-android-variants.html">T</a>) -&gt; <a href="config-with-android-variants.html">U</a>): <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.properties/-read-only-property/index.html">ReadOnlyProperty</a>&lt;<a href="-config-aware/index.html">ConfigAware</a>, <a href="config-with-android-variants.html">U</a>&gt;</p>
+
+<p>Creates a delegated read-only property that can be used in <a href="-config-aware/index.html">ConfigAware</a> objects. The name of the property is the key that is used during configuration lookup. The value of the property is evaluated and transformed only once.</p>
+
+<h2 id="parameters-1">Parameters</h2>
+
+<p>jvm</p>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th> </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>defaultValue</td>
+      <td>the value that the property evaluates to when there is no key with the name of the property in the config. Although <a href="config-with-android-variants.html">T</a> is defined as <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a>, only <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a>, <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-int/index.html">Int</a>, <a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-boolean/index.html">Boolean</a> and List are supported.</td>
+    </tr>
+    <tr>
+      <td>defaultAndroidValue</td>
+      <td>the value that the property evaluates to when there is no key with the name of the property in the config and there is a configuration property in the rule set named “android” that is set to <code>true</code>.</td>
+    </tr>
+    <tr>
+      <td>transformer</td>
+      <td>a function that transforms the value from the configuration (or the default) into its final value.</td>
+    </tr>
+  </tbody>
+</table>
 
 
 
@@ -491,7 +545,7 @@ More info</p>
             <div class="row">
                 <div class="col-lg-12 footer">
                &copy;2021 The detekt Team. All rights reserved. <br />
- Site last generated: Jun 22, 2021 <br />
+ Site last generated: Nov 1, 2021 <br />
                 </div>
             </div>
 </footer>
