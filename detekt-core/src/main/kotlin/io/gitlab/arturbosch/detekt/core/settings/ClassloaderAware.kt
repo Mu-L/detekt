@@ -4,7 +4,8 @@ import io.github.detekt.tooling.api.spec.ExtensionsSpec
 import org.jetbrains.kotlin.utils.closeQuietly
 import java.io.Closeable
 import java.net.URLClassLoader
-import java.nio.file.Files
+import kotlin.io.path.exists
+import kotlin.io.path.extension
 
 interface ClassloaderAware {
 
@@ -14,13 +15,13 @@ interface ClassloaderAware {
 }
 
 class ExtensionFacade(
-    private val extensionsSpec: ExtensionsSpec
+    private val plugins: ExtensionsSpec.Plugins?,
 ) : AutoCloseable, Closeable, ClassloaderAware {
 
     init {
-        extensionsSpec.plugins?.paths?.forEach {
-            require(Files.exists(it)) { "Given plugin ‘$it’ does not exist." }
-            require(it.toString().endsWith("jar")) { "Given plugin ‘$it’ is not a JAR." }
+        plugins?.paths?.forEach {
+            require(it.exists()) { "Given plugin ‘$it’ does not exist." }
+            require(it.extension == "jar") { "Given plugin ‘$it’ is not a JAR." }
         }
     }
 
@@ -28,7 +29,6 @@ class ExtensionFacade(
      * Shared class loader used to load services from plugin jars.
      */
     override val pluginLoader: ClassLoader by lazy {
-        val plugins = extensionsSpec.plugins
         when {
             plugins?.loader != null -> checkNotNull(plugins.loader)
             plugins?.paths != null -> {
@@ -46,7 +46,7 @@ class ExtensionFacade(
     }
 
     override fun closeLoaderIfNeeded() {
-        if (extensionsSpec.plugins?.paths != null) {
+        if (plugins?.paths != null) {
             // we created a classloader and need to close it
             closeQuietly(pluginLoader as? URLClassLoader)
         }

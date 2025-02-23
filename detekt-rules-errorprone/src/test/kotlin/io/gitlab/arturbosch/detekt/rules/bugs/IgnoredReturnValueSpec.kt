@@ -1,95 +1,102 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.rules.setupKotlinEnvironment
+import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.rules.KotlinCoreEnvironmentTest
 import io.gitlab.arturbosch.detekt.test.TestConfig
 import io.gitlab.arturbosch.detekt.test.assertThat
-import io.gitlab.arturbosch.detekt.test.compileAndLintWithContext
 import io.gitlab.arturbosch.detekt.test.lintWithContext
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 
-object IgnoredReturnValueSpec : Spek({
-    setupKotlinEnvironment()
+class IgnoredReturnValueSpec {
 
-    val env: KotlinCoreEnvironment by memoized()
+    @Nested
+    @KotlinCoreEnvironmentTest
+    inner class `default config with non-annotated return values`(private val env: KotlinCoreEnvironment) {
+        private val subject = IgnoredReturnValue(Config.empty)
 
-    describe("default config with non-annotated return values") {
-        val subject by memoized { IgnoredReturnValue() }
-
-        it("does not report when a function which returns a value is called and the return is ignored") {
+        @Test
+        fun `does not report when a function which returns a value is called and the return is ignored`() {
             val code = """
                 fun foo() {
                     listOf("hello")
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function which returns a value is called before a valid return") {
+        @Test
+        fun `does not report when a function which returns a value is called before a valid return`() {
             val code = """
                 fun foo() : Int {
                     listOf("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function which returns a value is called in chain and the return is ignored") {
+        @Test
+        fun `does not report when a function which returns a value is called in chain and the return is ignored`() {
             val code = """
                 fun foo() {
                     listOf("hello").isEmpty().not()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function which returns a value is called before a semicolon") {
+        @Test
+        fun `does not report when a function which returns a value is called before a semicolon`() {
             val code = """
                 fun foo() {
                     listOf("hello");println("foo")
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function which returns a value is called after a semicolon") {
+        @Test
+        fun `does not report when a function which returns a value is called after a semicolon`() {
             val code = """
                 fun foo() {
                     println("foo");listOf("hello")
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function which returns a value is called between comments") {
+        @Test
+        fun `does not report when a function which returns a value is called between comments`() {
             val code = """
                 fun foo() {
                     listOf("hello")//foo
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when an extension function which returns a value is called and the return is ignored") {
+        @Test
+        fun `does not report when an extension function which returns a value is called and the return is ignored`() {
             val code = """
                 fun Int.isTheAnswer(): Boolean = this == 42
                 fun foo(input: Int) {
                     input.isTheAnswer()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when the return value is assigned to a pre-existing variable") {
+        @Test
+        fun `does not report when the return value is assigned to a pre-existing variable`() {
             val code = """
                 package test
                 
@@ -103,76 +110,99 @@ object IgnoredReturnValueSpec : Spek({
                     var x: List<String>
                     x = listA()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function which doesn't return a value is called") {
+        @Test
+        fun `does not report when a function which doesn't return a value is called`() {
             val code = """
                 fun noReturnValue() {}
-
+                
                 fun foo() {
                     noReturnValue()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function's return value is used in a test statement") {
+        @Test
+        fun `does not report when a function's return value is used in a test statement`() {
             val code = """
                 fun returnsBoolean() = true
                 
                 fun f() {
                     if (returnsBoolean()) {}
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function's return value is used in a comparison") {
+        @Test
+        fun `does not report when a function's return value is used in a comparison`() {
             val code = """
                 fun returnsInt() = 42
                 
                 fun f() {
                     if (42 == returnsInt()) {}
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function's return value is used as parameter for another call") {
+        @Test
+        fun `does not report when a function's return value is used as parameter for another call`() {
             val code = """
                 fun returnsInt() = 42
                 
                 fun f() {
                     println(returnsInt())
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function's return value is used with named parameters") {
+        @Test
+        fun `does not report when a function's return value is used with named parameters`() {
             val code = """
                 fun returnsInt() = 42
                 
                 fun f() {
                     println(message = returnsInt())
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `does not report when a function's return value is assigned to set`() {
+            val code = """
+                fun returnsInt() = 42
+                
+                fun f() {
+                    val map = mutableMapOf<String, Int>()
+                    map["some-key"] = returnsInt()
+                    map.put("another-key", returnsInt())
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
     }
 
-    describe("default config with annotated return values") {
-        val subject by memoized { IgnoredReturnValue() }
+    @Nested
+    @KotlinCoreEnvironmentTest
+    inner class `default config with annotated return values`(private val env: KotlinCoreEnvironment) {
+        private val subject = IgnoredReturnValue(Config.empty)
 
-        it("reports when a function which returns a value is called and the return is ignored") {
+        @Test
+        fun `reports when a function which returns a value is called and the return is ignored`() {
             val code = """
                 package annotation
                 
@@ -183,20 +213,21 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello")
                     println("foo")
                 }
-            """
+            """.trimIndent()
             val annotationClass = """
                 package annotation
-
+                
                 annotation class CheckReturnValue
-            """
+            """.trimIndent()
 
-            val findings = subject.lintWithContext(env, code, annotationClass)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(7, 5)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            val findings = subject.lintWithContext(env, code, annotationClass, compile = false)
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(7, 5)
         }
 
-        it("reports when a function which returns a value is called before a valid return") {
+        @Test
+        fun `reports when a function which returns a value is called before a valid return`() {
             val code = """
                 package noreturn
                 
@@ -209,14 +240,15 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello")
                     return 42
                 }
-            """
+            """.trimIndent()
             val findings = subject.lintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(9, 5)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(9, 5)
         }
 
-        it("reports when a function which returns a value is called in chain as first statement and the return is ignored") {
+        @Test
+        fun `reports when a function which returns a value is called in chain as first statement and the return is ignored`() {
             val code = """
                 package noreturn
                 
@@ -229,12 +261,13 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello").isEmpty().not()
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function which returns a value is called in the middle of a chain and the return is ignored") {
+        @Test
+        fun `does not report when a function which returns a value is called in the middle of a chain and the return is ignored`() {
             val code = """
                 package noreturn
                 
@@ -245,42 +278,44 @@ object IgnoredReturnValueSpec : Spek({
                 
                 fun foo() : Int {
                     val hello = "world "
-                    hello.toUpperCase()
+                    hello.uppercase()
                         .trim()
                         .listOfChecked()
                         .isEmpty()
                         .not()
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("reports when a function which returns a value is called in the end of a chain and the return is ignored") {
+        @Test
+        fun `reports when a function which returns a value is called in the end of a chain and the return is ignored`() {
             val code = """
                 package noreturn
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun String.listOfChecked() = listOf(this)
-
+                
                 fun foo() : Int {
                     val hello = "world "
-                    hello.toUpperCase()
+                    hello.uppercase()
                         .trim()
                         .listOfChecked()
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(12, 10)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(12, 10)
         }
 
-        it("reports when a function which returns a value is called before a semicolon") {
+        @Test
+        fun `reports when a function which returns a value is called before a semicolon`() {
             val code = """
                 package special
                 
@@ -292,14 +327,15 @@ object IgnoredReturnValueSpec : Spek({
                 fun foo() {
                     listOfChecked("hello");println("foo")
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(9, 5)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(9, 5)
         }
 
-        it("reports when a function which returns a value is called after a semicolon") {
+        @Test
+        fun `reports when a function which returns a value is called after a semicolon`() {
             val code = """
                 package special
                 
@@ -312,14 +348,15 @@ object IgnoredReturnValueSpec : Spek({
                     println("foo");listOfChecked("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(9, 20)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(9, 20)
         }
 
-        it("reports when a function which returns a value is called between comments") {
+        @Test
+        fun `reports when a function which returns a value is called between comments`() {
             val code = """
                 package special
                 
@@ -332,14 +369,15 @@ object IgnoredReturnValueSpec : Spek({
                     /* foo */listOfChecked("hello")//foo
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(9, 14)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(9, 14)
         }
 
-        it("reports when an extension function which returns a value is called and the return is ignored") {
+        @Test
+        fun `reports when an extension function which returns a value is called and the return is ignored`() {
             val code = """
                 package specialize
                 
@@ -351,19 +389,20 @@ object IgnoredReturnValueSpec : Spek({
                     input.isTheAnswer()
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(8, 11)
-            assertThat(findings[0]).hasMessage("The call isTheAnswer is returning a value that is ignored.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call isTheAnswer is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(8, 11)
         }
 
-        it("does not report when the return value is assigned to a pre-existing variable") {
+        @Test
+        fun `does not report when the return value is assigned to a pre-existing variable`() {
             val code = """
                 package specialize
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun listOfChecked(value: String) = listOf(value)
                 
@@ -372,145 +411,153 @@ object IgnoredReturnValueSpec : Spek({
                     x = listOfChecked("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function which doesn't return a value is called") {
+        @Test
+        fun `does not report when a function which doesn't return a value is called`() {
             val code = """
                 package specialize
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun noReturnValue() {}
-
+                
                 fun foo() : Int {
                     noReturnValue()
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function's return value is used in a test statement") {
+        @Test
+        fun `does not report when a function's return value is used in a test statement`() {
             val code = """
                 package comparison
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsBoolean() = true
                 
                 fun f() {
                     if (returnsBoolean()) {}
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function's return value is used in a comparison") {
+        @Test
+        fun `does not report when a function's return value is used in a comparison`() {
             val code = """
                 package comparison
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsInt() = 42
                 
                 fun f() {
                     if (42 == returnsInt()) {}
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function's return value is used as parameter for another call") {
+        @Test
+        fun `does not report when a function's return value is used as parameter for another call`() {
             val code = """
                 package parameter
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsInt() = 42
                 
                 fun f() {
                     println(returnsInt())
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function's return value is used with named parameters") {
+        @Test
+        fun `does not report when a function's return value is used with named parameters`() {
             val code = """
                 package parameter
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsInt() = 42
                 
                 fun f() {
                     println(message = returnsInt())
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function is the last statement in a block and it's used") {
+        @Test
+        fun `does not report when a function is the last statement in a block and it's used`() {
             val code = """
                 package block
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsInt() = 42
-
+                
                 val result = if (true) {
                     1
                 } else {
                     returnsInt()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("report when a function is not the last statement in a 'if' block and 'if' block is used") {
+        @Test
+        fun `report when a function is not the last statement in a 'if' block and 'if' block is used`() {
             val code = """
                 package block
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsInt() = 42
-
+                
                 val result = if (true) {
                     1
                 } else {
                     returnsInt()
                     2
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("does not report when a function is the last statement in a block and it's in a chain") {
+        @Test
+        fun `does not report when a function is the last statement in a block and it's in a chain`() {
             val code = """
                 package block
-
+                
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsInt() = 42
-
+                
                 fun test() {
                     if (true) {
                         1
@@ -518,20 +565,21 @@ object IgnoredReturnValueSpec : Spek({
                         returnsInt()
                     }.plus(1)
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("report when a function is not the last statement in a block and it's in a chain") {
+        @Test
+        fun `report when a function is not the last statement in a block and it's in a chain`() {
             val code = """
                 package block
-
+                
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsInt() = 42
-
+                
                 fun test() {
                     if (true) {
                         1
@@ -540,20 +588,21 @@ object IgnoredReturnValueSpec : Spek({
                         2
                     }.plus(1)
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("report when a function is the last statement in a block") {
+        @Test
+        fun `report when a function is the last statement in a block`() {
             val code = """
                 package block
-
+                
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun returnsInt() = 42
-
+                
                 fun test() {
                     if (true) {
                         println("hello")
@@ -561,38 +610,58 @@ object IgnoredReturnValueSpec : Spek({
                         returnsInt()
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("does not report when a function return value is consumed in a chain that returns a Unit") {
+        @Test
+        fun `does not report when a function return value is consumed in a chain that returns a Unit`() {
             val code = """
                 package callchain
                 
                 annotation class CheckReturnValue
-
+                
                 @CheckReturnValue
                 fun String.listOfChecked() = listOf(this)
                 fun List<String>.print() { println(this) }
                 
                 fun foo() : Int {
                     val hello = "world "
-                    hello.toUpperCase()
+                    hello.uppercase()
                         .trim()
                         .listOfChecked()
                         .print()
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("reports when the containing class of a function has `@CheckReturnValue`") {
+        @Test
+        fun `does not report when a function's return value is assigned to set`() {
+            val code = """
+                annotation class CheckReturnValue
+
+                @CheckReturnValue
+                fun returnsInt() = 42
+                
+                fun f() {
+                    val map = mutableMapOf<String, Int>()
+                    map["some-key"] = returnsInt()
+                    map.put("another-key", returnsInt())
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `reports when the containing class of a function has _@CheckReturnValue_`() {
             val code = """
                 package foo
-
+                
                 annotation class CheckReturnValue
                 
                 @CheckReturnValue
@@ -603,34 +672,36 @@ object IgnoredReturnValueSpec : Spek({
                 fun main() {
                     Assertions().listOfChecked("hello")
                 }
-            """
+            """.trimIndent()
             val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("reports when the containing object of a function has `@CheckReturnValue`") {
+        @Test
+        fun `reports when the containing object of a function has _@CheckReturnValue_`() {
             val code = """
                 package foo
-
+                
                 annotation class CheckReturnValue
                 
                 @CheckReturnValue
                 object Assertions {
                     fun listOfChecked(value: String) = listOf(value)
                 }
-
+                
                 fun main() {
                     Assertions.listOfChecked("hello")
                 }
-            """
+            """.trimIndent()
             val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("does not report when the containing class of a function has `@CheckReturnValue` but the function has `@CanIgnoreReturnValue`") {
+        @Test
+        fun `does not report when the containing class of a function has _@CheckReturnValue_ but the function has _@CanIgnoreReturnValue_`() {
             val code = """
                 package foo
-
+                
                 annotation class CheckReturnValue
                 annotation class CanIgnoreReturnValue
                 
@@ -643,12 +714,13 @@ object IgnoredReturnValueSpec : Spek({
                 fun main() {
                     Assertions().listOfChecked("hello")
                 }
-            """
+            """.trimIndent()
             val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when the containing class of a function has no `@CheckReturnValue` but the parent class has `@CheckReturnValue`") {
+        @Test
+        fun `does not report when the containing class of a function has no _@CheckReturnValue_ but the parent class has _@CheckReturnValue_`() {
             val code = """
                 package foo
                 
@@ -664,20 +736,103 @@ object IgnoredReturnValueSpec : Spek({
                 fun main() {
                     Parent.Child().listOfChecked("hello")
                 }
-            """
+            """.trimIndent()
             val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
-    }
 
-    describe("custom annotation config") {
-        val subject by memoized {
-            IgnoredReturnValue(
-                TestConfig(mapOf("returnValueAnnotations" to listOf("*.CustomReturn")))
-            )
+        @Test
+        fun `reports ignored return value in lambda of 'with' function`() {
+            val code = """
+                fun test(db: Database, sql: String) {
+                    with(db) {
+                        insert(sql) // Should be detected
+                    }
+                    with(db) {
+                        return@with insert(sql) // Should be detected
+                    }
+
+                    with(db) { insert(sql).execute() }
+                    with(db) { foo(insert(sql)) }
+                    with(db) { insert(sql) }.execute()
+                    val x = with(db) { insert(sql) }
+                }
+                
+                annotation class CheckResult
+                
+                class Database {
+                    @CheckResult
+                    fun insert(query: String): Insert = TODO()
+                }
+                
+                class Insert {
+                    fun execute(): Int = TODO()
+                }
+
+                fun foo(insert: Insert) {}
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).hasSize(2)
         }
 
-        it("reports when a function is annotated with the custom annotation") {
+        @Test
+        fun `reports ignored return value in lambda of 'run' function`() {
+            val code = """
+                fun test(db: Database, sql: String) {
+                    db.run {
+                        insert(sql) // Should be detected
+                    }
+                }
+                
+                annotation class CheckResult
+                
+                class Database {
+                    @CheckResult
+                    fun insert(query: String): Insert = TODO()
+                }
+                
+                class Insert {
+                    fun execute(): Int = TODO()
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).hasSize(1)
+        }
+
+        @Test
+        fun `reports ignored return value in lambda of 'let' function`() {
+            val code = """
+                 fun test(db: Database, sql: String) {
+                     db.let {
+                         it.insert(sql) // Should be detected
+                     }
+                 }
+                
+                 annotation class CheckResult
+                
+                 class Database {
+                     @CheckResult
+                     fun insert(query: String): Insert = TODO()
+                 }
+                
+                 class Insert {
+                     fun execute(): Int = TODO()
+                 }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).hasSize(1)
+        }
+    }
+
+    @Nested
+    @KotlinCoreEnvironmentTest
+    inner class `custom annotation config`(private val env: KotlinCoreEnvironment) {
+        val subject = IgnoredReturnValue(
+            TestConfig("returnValueAnnotations" to listOf("*.CustomReturn"))
+        )
+
+        @Test
+        fun `reports when a function is annotated with the custom annotation`() {
             val code = """
                 package config
                 annotation class CustomReturn
@@ -689,14 +844,15 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(8, 5)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(8, 5)
         }
 
-        it("does not report when a function is annotated with the not included annotation") {
+        @Test
+        fun `does not report when a function is annotated with the not included annotation`() {
             val code = """
                 package config
                 
@@ -709,33 +865,35 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function is not annotated") {
+        @Test
+        fun `does not report when a function is not annotated`() {
             val code = """
                 package config
-
+                
                 fun listOfChecked(value: String) = listOf(value)
                 
                 fun foo() : Int {
                     listOfChecked("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
     }
 
-    describe("restrict to annotated methods config") {
-        val subject by memoized {
-            IgnoredReturnValue(TestConfig(mapOf("restrictToAnnotatedMethods" to false)))
-        }
+    @Nested
+    @KotlinCoreEnvironmentTest
+    inner class `restrict to config`(private val env: KotlinCoreEnvironment) {
+        val subject = IgnoredReturnValue(TestConfig("restrictToConfig" to false))
 
-        it("reports when a function is annotated with a custom annotation") {
+        @Test
+        fun `reports when a function is annotated with a custom annotation`() {
             val code = """
                 package config
                 
@@ -748,14 +906,15 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(9, 5)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(9, 5)
         }
 
-        it("reports when a function is not annotated") {
+        @Test
+        fun `reports when a function is not annotated`() {
             val code = """
                 fun listOfChecked(value: String) = listOf(value)
                 
@@ -763,19 +922,54 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(4, 5)
-            assertThat(findings[0]).hasMessage("The call listOfChecked is returning a value that is ignored.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call listOfChecked is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(4, 5)
         }
 
-        it("does not report when a function has `@CanIgnoreReturnValue`") {
+        @Test
+        fun `reports when a single function inside main is not annotated - #5806`() {
+            val code = """
+                fun main() {
+                    ignoredReturn()
+                }
+                
+                fun ignoredReturn(): String = "asd"
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("The call ignoredReturn is returning a value that is ignored.")
+            assertThat(findings).hasStartSourceLocation(2, 5)
+        }
+
+        @Test
+        fun `reports when a function returns type that should not be ignored`() {
+            val code = """
+                import kotlinx.coroutines.flow.MutableStateFlow
+                
+                fun flowOfChecked(value: String) = MutableStateFlow(value)
+                
+                fun foo() : Int {
+                    flowOfChecked("hello")
+                    return 42
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings)
+                .singleElement()
+                .hasSourceLocation(6, 5)
+                .hasMessage("The call flowOfChecked is returning a value that is ignored.")
+        }
+
+        @Test
+        fun `does not report when a function has _@CanIgnoreReturnValue_`() {
             val code = """
                 package foo
-
+                
                 annotation class CanIgnoreReturnValue
-
+                
                 @CanIgnoreReturnValue
                 fun listOfChecked(value: String) = listOf(value)
                 
@@ -783,17 +977,18 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello")
                     return 42
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("does not report when a function has a custom annotation") {
+        @Test
+        fun `does not report when a function has a custom annotation`() {
             val code = """
                 package foo
-
+                
                 annotation class CustomIgnoreReturn
-
+                
                 @CustomIgnoreReturn
                 fun listOfChecked(value: String) = listOf(value)
                 
@@ -801,17 +996,254 @@ object IgnoredReturnValueSpec : Spek({
                     listOfChecked("hello")
                     return 42
                 }
-            """
+            """.trimIndent()
             val rule = IgnoredReturnValue(
                 TestConfig(
-                    mapOf(
-                        "ignoreReturnValueAnnotations" to listOf("*.CustomIgnoreReturn"),
-                        "restrictToAnnotatedMethods" to false
-                    )
+                    "ignoreReturnValueAnnotations" to listOf("*.CustomIgnoreReturn"),
+                    "restrictToConfig" to false,
                 )
             )
-            val findings = rule.compileAndLintWithContext(env, code)
+            val findings = rule.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `does not report when a function has a custom annotation on parent`() {
+            val code = """
+                package foo
+                
+                annotation class CustomIgnoreReturn
+                
+                @CustomIgnoreReturn
+                object Foo {
+                    fun listOfChecked(value: String) = listOf(value)
+                }
+                
+                fun foo() : Int {
+                    Foo.listOfChecked("hello")
+                    return 42
+                }
+            """.trimIndent()
+            val rule = IgnoredReturnValue(
+                TestConfig(
+                    "ignoreReturnValueAnnotations" to listOf("*.CustomIgnoreReturn"),
+                    "restrictToConfig" to false,
+                )
+            )
+            val findings = rule.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `does not report when a function is in ignoreFunctionCall`() {
+            val code = """
+                package foo
+                
+                fun listOfChecked(value: String) = listOf(value)
+                
+                fun foo() : Int {
+                    listOfChecked("hello")
+                    return 42
+                }
+            """.trimIndent()
+            val rule = IgnoredReturnValue(
+                TestConfig(
+                    "ignoreFunctionCall" to listOf("foo.listOfChecked"),
+                    "restrictToConfig" to false,
+                )
+            )
+            val findings = rule.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `does not report when a function returns Unit`() {
+            val code = """
+                fun foo() {
+                    println(42)
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `does not report when a function returns Nothing`() {
+            val code = """
+                fun foo() {
+                    TODO("tbd")
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
     }
-})
+
+    @Nested
+    @KotlinCoreEnvironmentTest
+    inner class `return value types default config`(private val env: KotlinCoreEnvironment) {
+        private val subject = IgnoredReturnValue(Config.empty)
+
+        @Test
+        fun `reports when result of function returning Flow is ignored`() {
+            val code = """
+                import kotlinx.coroutines.flow.flowOf
+                
+                fun foo() {
+                    flowOf(1, 2, 3)
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+
+            assertThat(findings)
+                .singleElement()
+                .hasSourceLocation(line = 4, column = 5)
+                .hasMessage("The call flowOf is returning a value that is ignored.")
+        }
+
+        @Test
+        fun `reports when a function returned result is used in a chain that returns a Flow`() {
+            val code = """
+                import kotlinx.coroutines.flow.*
+                
+                fun foo() {
+                    flowOf(1, 2, 3)
+                        .onEach { println(it) }
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+
+            assertThat(findings)
+                .singleElement()
+                .hasSourceLocation(line = 5, column = 10)
+                .hasMessage("The call onEach is returning a value that is ignored.")
+        }
+
+        @Test
+        fun `does not report when a function returned value is used to be returned`() {
+            val code = """
+                import kotlinx.coroutines.flow.flowOf
+                
+                fun foo() = flowOf(1, 2, 3)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `does not report when a function returned value is consumed in a chain that returns an Unit`() {
+            val code = """
+                import kotlinx.coroutines.flow.*
+                
+                suspend fun foo() {
+                    flowOf(1, 2, 3)
+                        .onEach { println(it) }
+                        .collect()
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `reports when result of function returning lambda is ignored`() {
+            val code = """
+                fun returnsALambda(): () -> Int = {
+                    42
+                }
+                
+                fun foo() : Int {
+                    returnsALambda()
+                    return 42
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings)
+                .singleElement()
+                .hasSourceLocation(6, 5)
+                .hasMessage("The call returnsALambda is returning a value that is ignored.")
+        }
+
+        @Test
+        fun `reports when result of function returning lambda with arguments is ignored`() {
+            val code = """
+                fun returnsALambda(): (Boolean, String) -> Int = { _, _ ->
+                    42
+                }
+                
+                fun foo() : Int {
+                    returnsALambda()
+                    return 42
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings)
+                .singleElement()
+                .hasSourceLocation(6, 5)
+                .hasMessage("The call returnsALambda is returning a value that is ignored.")
+        }
+
+        @Test
+        fun `doesn't report when result of function returning lambda is ignored`() {
+            val code = """
+                fun returnsALambda(): () -> Int = {
+                    42
+                }
+                
+                fun foo() : Int {
+                    returnsALambda().invoke()
+                    return 42
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+    }
+
+    @Nested
+    @KotlinCoreEnvironmentTest(additionalJavaSourcePaths = ["java"])
+    inner class `Java sources`(val env: KotlinCoreEnvironment) {
+        private val subject = IgnoredReturnValue(Config.empty)
+
+        @Test
+        fun `reports when annotation is on the method`() {
+            val code = """
+                import com.example.ignore_return_value.Foo
+                
+                fun test(foo: Foo) {
+                    foo.foo()
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code, compile = false)
+            assertThat(findings).hasSize(1)
+        }
+
+        @Test
+        fun `reports when annotation is on the package`() {
+            val code = """
+                import com.example.ignore_return_value.annotation_on_package.Bar
+                
+                fun test(bar: Bar) {
+                    bar.bar()
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code, compile = false)
+            assertThat(findings).hasSize(1)
+        }
+
+        @Test
+        fun `does not report when a function's return value is assigned to set`() {
+            val code = """
+                import com.example.ignore_return_value.Foo
+
+                fun test(foo: Foo) {
+                    val map = mutableMapOf<String, Any>()
+                    map["some_key"] = foo.foo()
+                    map.put("another-key", foo.foo())
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code, compile = false)
+            assertThat(findings).isEmpty()
+        }
+    }
+}

@@ -1,22 +1,22 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
+import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.psi.KtArrayAccessExpression
 import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
-import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
-import org.jetbrains.kotlin.resolve.calls.callUtil.getType
+import org.jetbrains.kotlin.psi2ir.deparenthesize
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getType
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
 import org.jetbrains.kotlin.types.isNullable
 import org.jetbrains.kotlin.types.typeUtil.isSubtypeOf
@@ -40,19 +40,17 @@ import org.jetbrains.kotlin.types.typeUtil.makeNotNullable
  * </compliant>
  *
  */
-@RequiresTypeResolution
-class UseOrEmpty(config: Config = Config.empty) : Rule(config) {
-    override val issue: Issue = Issue(
-        "UseOrEmpty",
-        Severity.Style,
-        "Use 'orEmpty()' call instead of '?: emptyList()'",
-        Debt.FIVE_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class UseOrEmpty(config: Config) :
+    Rule(
+        config,
+        "Use `orEmpty()` call instead of `?:` with empty collection factory methods",
+    ),
+    RequiresFullAnalysis {
 
     @Suppress("ReturnCount")
     override fun visitBinaryExpression(expression: KtBinaryExpression) {
         super.visitBinaryExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
 
         if (expression.operationToken != KtTokens.ELVIS) return
         val left = expression.left ?: return
@@ -61,11 +59,21 @@ class UseOrEmpty(config: Config = Config.empty) : Rule(config) {
 
         val leftType = left.getType(bindingContext) ?: return
         if (!leftType.isNullable()) return
+        if (left.deparenthesize() is KtArrayAccessExpression) {
+            val functionDescriptor = left.getResolvedCall(bindingContext)?.resultingDescriptor as? FunctionDescriptor
+            if (functionDescriptor != null &&
+                functionDescriptor.isOperator &&
+                functionDescriptor.typeParameters.isNotEmpty()
+            ) {
+                return
+            }
+        }
+
         val rightType = right.getType(bindingContext) ?: return
         if (!leftType.makeNotNullable().isSubtypeOf(rightType)) return
 
         val message = "This '${KtTokens.ELVIS.value} ${right.text}' can be replaced with 'orEmpty()' call"
-        report(CodeSmell(issue, Entity.from(expression), message))
+        report(Finding(Entity.from(expression), message))
     }
 
     private fun KtExpression.isEmptyElement(): Boolean {

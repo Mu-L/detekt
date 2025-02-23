@@ -1,12 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.psi.KtClassBody
 import org.jetbrains.kotlin.psi.KtClassInitializer
 import org.jetbrains.kotlin.psi.KtDeclaration
@@ -51,39 +48,102 @@ import org.jetbrains.kotlin.psi.KtSecondaryConstructor
  * }
  * </compliant>
  */
-class ClassOrdering(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Class contents should be in this order: Property declarations/initializer blocks; secondary constructors; " +
-            "method declarations then companion objects.",
-        Debt.FIVE_MINS
-    )
+class ClassOrdering(config: Config) : Rule(
+    config,
+    "Class contents should be in this order: Property declarations/initializer blocks; secondary constructors; " +
+        "method declarations then companion objects."
+) {
 
     override fun visitClassBody(classBody: KtClassBody) {
         super.visitClassBody(classBody)
 
-        var currentSection = Section(0)
-        for (ktDeclaration in classBody.declarations) {
-            val section = ktDeclaration.toSection() ?: continue
-            when {
-                section < currentSection -> {
-                    val message =
-                        "${ktDeclaration.toDescription()} should be declared before ${currentSection.toDescription()}."
-                    report(
-                        CodeSmell(
-                            issue = issue,
-                            entity = Entity.from(ktDeclaration),
-                            message = message,
-                            references = listOf(Entity.from(classBody))
-                        )
-                    )
+        val declarations = classBody.declarations.filterNotNull()
+        if (declarations.isEmpty()) return
+        val (violatingDeclarationWithSections, increasingDeclarationWithSections) = getMinimalNumberOfViolations(
+            declarations
+        ) ?: return
+        violatingDeclarationWithSections.forEach { (violatingDeclaration, violatingSection) ->
+            val increasingDeclarationsBeforeViolatingElement =
+                declarations.takeWhile { it != violatingDeclaration }
+            val increasingDeclarationSectionBeforeViolatingElement =
+                increasingDeclarationWithSections.takeWhile {
+                    it.declaration in increasingDeclarationsBeforeViolatingElement
                 }
-                section > currentSection -> currentSection = section
-            }
+            // for finding section from which violatingSection should be before we are only
+            // taking declarations which is already before the violatingSection
+            val (directionMsg, anchorSection) = increasingDeclarationSectionBeforeViolatingElement
+                .find {
+                    it.section.priority > violatingSection.priority
+                }
+                ?.let {
+                    "before" to it
+                }
+                ?: run {
+                    "after" to
+                        increasingDeclarationWithSections
+                            .findLast { it.section.priority < violatingSection.priority }
+                }
+            anchorSection ?: return@forEach
+            val message =
+                "${violatingDeclaration.toDescription()} should be declared $directionMsg " +
+                    "${anchorSection.section.toDescription()}."
+            report(
+                Finding(
+                    entity = Entity.from(violatingDeclaration),
+                    message = message,
+                    references = listOf(Entity.from(classBody))
+                )
+            )
         }
     }
+
+    private fun getMinimalNumberOfViolations(
+        declarations: List<KtDeclaration>,
+    ): Pair<List<DeclarationWithSection>, List<DeclarationWithSection>>? {
+        val declarationWithSectionList = declarations.mapNotNull { declaration ->
+            declaration.toSection()?.let {
+                DeclarationWithSection(
+                    declaration,
+                    it
+                )
+            }
+        }
+        val dp = IntArray(declarationWithSectionList.size) {
+            return@IntArray 1
+        }
+        val backTrack = IntArray(declarationWithSectionList.size) {
+            return@IntArray it
+        }
+        for (i in dp.indices) {
+            for (j in 0..<i) {
+                if (declarationWithSectionList[i].section.priority >=
+                    declarationWithSectionList[j].section.priority &&
+                    dp[i] < dp[j] + 1
+                ) {
+                    dp[i] = dp[j] + 1
+                    backTrack[i] = j
+                }
+            }
+        }
+
+        var index = dp.indices.maxByOrNull { dp[it] } ?: return null
+
+        val listOfIncreasingSection = buildList {
+            var oldIndex: Int
+            do {
+                add(declarationWithSectionList[index])
+                oldIndex = index
+                index = backTrack[index]
+            } while (index != oldIndex)
+        }.reversed()
+        return declarationWithSectionList.minus(listOfIncreasingSection.toSet()) to
+            listOfIncreasingSection
+    }
+
+    private data class DeclarationWithSection(
+        val declaration: KtDeclaration,
+        val section: Section,
+    )
 }
 
 private fun KtDeclaration.toDescription(): String = when {

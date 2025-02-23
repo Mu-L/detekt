@@ -1,16 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtFinallySection
 import org.jetbrains.kotlin.psi.KtReturnExpression
@@ -18,10 +15,9 @@ import org.jetbrains.kotlin.psi.KtTryExpression
 import org.jetbrains.kotlin.psi.psiUtil.blockExpressionsOrSingle
 import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.jetbrains.kotlin.psi.psiUtil.isInsideOf
-import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.bindingContextUtil.getTargetFunction
 import org.jetbrains.kotlin.resolve.bindingContextUtil.isUsedAsExpression
-import org.jetbrains.kotlin.resolve.calls.callUtil.getType
+import org.jetbrains.kotlin.resolve.calls.util.getType
 import org.jetbrains.kotlin.types.KotlinType
 
 /**
@@ -41,23 +37,19 @@ import org.jetbrains.kotlin.types.KotlinType
  * val a: String = try { "s" } catch (e: Exception) { "e" } finally { "f" }
  * </noncompliant>
  */
-@RequiresTypeResolution
 @ActiveByDefault(since = "1.16.0")
-class ReturnFromFinally(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "ReturnFromFinally",
-        Severity.Defect,
-        "Do not return within a finally statement. This can discard exceptions.",
-        Debt.TWENTY_MINS
-    )
+class ReturnFromFinally(config: Config) :
+    Rule(
+        config,
+        "Do not return within a finally statement. This can discard exceptions."
+    ),
+    RequiresFullAnalysis {
 
     @Configuration("ignores labeled return statements")
     private val ignoreLabeled: Boolean by config(false)
 
     override fun visitTryExpression(expression: KtTryExpression) {
         super.visitTryExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
 
         val finallyBlock = expression.finallyBlock ?: return
 
@@ -65,8 +57,7 @@ class ReturnFromFinally(config: Config = Config.empty) : Rule(config) {
             finallyBlock.typeEqualsTo(expression.getType(bindingContext))
         ) {
             report(
-                CodeSmell(
-                    issue = issue,
+                Finding(
                     entity = Entity.Companion.from(finallyBlock),
                     message = "Contents of the finally block do not affect " +
                         "the result of the expression."
@@ -79,12 +70,12 @@ class ReturnFromFinally(config: Config = Config.empty) : Rule(config) {
                 isReturnFromTargetFunction(finallyBlock.finalExpression, returnExpression) &&
                     canFilterLabeledExpression(returnExpression)
             }
-            .forEach { report(CodeSmell(issue, Entity.from(it), issue.description)) }
+            .forEach { report(Finding(Entity.from(it), description)) }
     }
 
     private fun isReturnFromTargetFunction(
         blockExpression: KtBlockExpression,
-        returnStmts: KtReturnExpression
+        returnStmts: KtReturnExpression,
     ): Boolean {
         val targetFunction = returnStmts.getTargetFunction(bindingContext)
             ?: return false
@@ -97,7 +88,7 @@ class ReturnFromFinally(config: Config = Config.empty) : Rule(config) {
     }
 
     private fun canFilterLabeledExpression(
-        returnStmt: KtReturnExpression
+        returnStmt: KtReturnExpression,
     ): Boolean = !ignoreLabeled || returnStmt.labeledExpression == null
 
     private fun KtFinallySection.typeEqualsTo(type: KotlinType?): Boolean {

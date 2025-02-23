@@ -1,23 +1,13 @@
 package io.gitlab.arturbosch.detekt.generator.printer.defaultconfig
 
-import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.generator.collection.Configuration
-import io.gitlab.arturbosch.detekt.generator.collection.Rule
+import io.github.detekt.utils.yaml
 import io.gitlab.arturbosch.detekt.generator.collection.RuleSetPage
-import io.gitlab.arturbosch.detekt.generator.collection.RuleSetProvider
-import io.gitlab.arturbosch.detekt.generator.out.YamlNode
-import io.gitlab.arturbosch.detekt.generator.out.keyValue
-import io.gitlab.arturbosch.detekt.generator.out.list
-import io.gitlab.arturbosch.detekt.generator.out.node
-import io.gitlab.arturbosch.detekt.generator.out.yaml
 import io.gitlab.arturbosch.detekt.generator.printer.DocumentationPrinter
 
 object ConfigPrinter : DocumentationPrinter<List<RuleSetPage>> {
 
-    override fun print(item: List<RuleSetPage>): String {
-        return yaml {
-            yaml { defaultBuildConfiguration() }
-            emptyLine()
+    override fun print(item: List<RuleSetPage>): String =
+        yaml {
             yaml { defaultConfigConfiguration() }
             emptyLine()
             yaml { defaultProcessorsConfiguration() }
@@ -28,104 +18,62 @@ object ConfigPrinter : DocumentationPrinter<List<RuleSetPage>> {
             emptyLine()
 
             item.sortedBy { it.ruleSet.name }
-                .forEach { printRuleSet(it.ruleSet, it.rules) }
+                .forEach { printRuleSetPage(it) }
         }
-    }
 
-    @Suppress("ComplexMethod") // preserving the declarative structure while building the dsl
-    private fun YamlNode.printRuleSet(ruleSet: RuleSetProvider, rules: List<Rule>) {
-        node(ruleSet.name) {
-            keyValue { Config.ACTIVE_KEY to "${ruleSet.defaultActivationStatus.active}" }
-            val ruleSetExclusion = exclusions.singleOrNull { ruleSet.name in it.ruleSets }
-            if (ruleSetExclusion != null) {
-                keyValue { Config.EXCLUDES_KEY to ruleSetExclusion.pattern }
-            }
-
-            ruleSet.configuration.forEach { printConfiguration(it) }
-
-            rules.forEach { rule ->
-                node(rule.name) {
-                    keyValue { Config.ACTIVE_KEY to "${rule.defaultActivationStatus.active}" }
-                    if (rule.autoCorrect) {
-                        keyValue { Config.AUTO_CORRECT_KEY to "true" }
-                    }
-                    val ruleExclusion = exclusions.singleOrNull { it.isExcluded(rule) }
-                    if (ruleExclusion != null) {
-                        keyValue { Config.EXCLUDES_KEY to ruleExclusion.pattern }
-                    }
-                    rule.configuration.forEach { printConfiguration(it) }
-                }
-            }
-            emptyLine()
+    fun printCustomRuleConfig(item: List<RuleSetPage>): String =
+        yaml {
+            item.sortedBy { it.ruleSet.name }
+                .forEach { printRuleSetPage(it) }
         }
-    }
-
-    private fun YamlNode.printConfiguration(configuration: Configuration) {
-        if (configuration.isDeprecated()) return
-
-        if (configuration.isDefaultValueNonEmptyList()) {
-            list(configuration.name, configuration.getDefaultValueAsList())
-        } else {
-            keyValue { configuration.name to configuration.defaultValue }
-        }
-    }
-
-    private fun defaultBuildConfiguration(): String = """
-      build:
-        maxIssues: 0
-        excludeCorrectable: false
-        weights:
-          # complexity: 2
-          # LongParameterList: 1
-          # style: 1
-          # comments: 1
-    """.trimIndent()
 
     private fun defaultConfigConfiguration(): String = """
-      config:
-        validation: true
-        warningsAsErrors: false
-        # when writing own rules with new properties, exclude the property path e.g.: 'my_rule_set,.*>.*>[my_property]'
-        excludes: ''
+        config:
+          validation: true
+          warningsAsErrors: false
+          checkExhaustiveness: false
+          # when writing own rules with new properties, exclude the property path e.g.: ['my_rule_set', '.*>.*>[my_property]']
+          excludes: []
     """.trimIndent()
 
     private fun defaultProcessorsConfiguration(): String = """
-      processors:
-        active: true
-        exclude:
-          - 'DetektProgressListener'
-        # - 'KtFileCountProcessor'
-        # - 'PackageCountProcessor'
-        # - 'ClassCountProcessor'
-        # - 'FunctionCountProcessor'
-        # - 'PropertyCountProcessor'
-        # - 'ProjectComplexityProcessor'
-        # - 'ProjectCognitiveComplexityProcessor'
-        # - 'ProjectLLOCProcessor'
-        # - 'ProjectCLOCProcessor'
-        # - 'ProjectLOCProcessor'
-        # - 'ProjectSLOCProcessor'
-        # - 'LicenseHeaderLoaderExtension'
+        processors:
+          active: true
+          exclude:
+            - 'DetektProgressListener'
+          # - 'KtFileCountProcessor'
+          # - 'PackageCountProcessor'
+          # - 'ClassCountProcessor'
+          # - 'FunctionCountProcessor'
+          # - 'PropertyCountProcessor'
+          # - 'ProjectComplexityProcessor'
+          # - 'ProjectCognitiveComplexityProcessor'
+          # - 'ProjectLLOCProcessor'
+          # - 'ProjectCLOCProcessor'
+          # - 'ProjectLOCProcessor'
+          # - 'ProjectSLOCProcessor'
+          # - 'LicenseHeaderLoaderExtension'
     """.trimIndent()
 
     private fun defaultConsoleReportsConfiguration(): String = """
-      console-reports:
-        active: true
-        exclude:
-           - 'ProjectStatisticsReport'
-           - 'ComplexityReport'
-           - 'NotificationReport'
-        #  - 'FindingsReport'
-           - 'FileBasedFindingsReport'
-           - 'LiteFindingsReport'
+        console-reports:
+          active: true
+          exclude:
+             - 'ProjectStatisticsReport'
+             - 'ComplexityReport'
+             - 'NotificationReport'
+             - 'IssuesReport'
+             - 'FileBasedIssuesReport'
+          #  - 'LiteIssuesReport'
     """.trimIndent()
 
     private fun defaultOutputReportsConfiguration(): String = """
-      output-reports:
-        active: true
-        exclude:
-        # - 'TxtOutputReport'
-        # - 'XmlOutputReport'
-        # - 'HtmlOutputReport'
+        output-reports:
+          active: true
+          exclude:
+          # - 'XmlOutputReport'
+          # - 'HtmlOutputReport'
+          # - 'MdOutputReport'
+          # - 'sarif'
     """.trimIndent()
 }

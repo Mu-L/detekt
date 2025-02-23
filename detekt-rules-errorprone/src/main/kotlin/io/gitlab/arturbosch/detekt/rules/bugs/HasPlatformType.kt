@@ -1,13 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
 import org.jetbrains.kotlin.psi.KtElement
@@ -21,6 +19,7 @@ import org.jetbrains.kotlin.types.isFlexible
  * Based on code from Kotlin project:
  * https://github.com/JetBrains/kotlin/blob/1.3.50/idea/src/org/jetbrains/kotlin/idea/intentions/SpecifyTypeExplicitlyIntention.kt#L86-L107
  */
+
 /**
  * Platform types must be declared explicitly in public APIs to prevent unexpected errors.
  *
@@ -37,24 +36,20 @@ import org.jetbrains.kotlin.types.isFlexible
  * </compliant>
  *
  */
-@RequiresTypeResolution
-class HasPlatformType(config: Config) : Rule(config) {
-
-    override val issue = Issue(
-        "HasPlatformType",
-        Severity.Maintainability,
-        "Platform types must be declared explicitly in public APIs.",
-        Debt.FIVE_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class HasPlatformType(config: Config) :
+    Rule(
+        config,
+        "Platform types must be declared explicitly in public APIs."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitKtElement(element: KtElement) {
         super.visitKtElement(element)
-        if (bindingContext == BindingContext.EMPTY) return
 
         if (element is KtCallableDeclaration && element.hasImplicitPlatformType()) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.from(element),
                     "$element has implicit platform type. Type must be declared explicitly."
                 )

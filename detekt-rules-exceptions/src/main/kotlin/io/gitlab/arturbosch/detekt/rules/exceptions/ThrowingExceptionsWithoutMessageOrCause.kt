@@ -1,15 +1,12 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import org.jetbrains.kotlin.psi.KtCallExpression
 
 /**
@@ -37,16 +34,12 @@ import org.jetbrains.kotlin.psi.KtCallExpression
  * </compliant>
  */
 @ActiveByDefault(since = "1.16.0")
-class ThrowingExceptionsWithoutMessageOrCause(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "ThrowingExceptionsWithoutMessageOrCause",
-        Severity.Warning,
-        "A call to the default constructor of an exception was detected. " +
-            "Instead one of the constructor overloads should be called. " +
-            "This allows to provide more meaningful exceptions.",
-        Debt.FIVE_MINS
-    )
+class ThrowingExceptionsWithoutMessageOrCause(config: Config) : Rule(
+    config,
+    "A call to the default constructor of an exception was detected. " +
+        "Instead one of the constructor overloads should be called. " +
+        "This allows to provide more meaningful exceptions."
+) {
 
     @Configuration("exceptions which should not be thrown without message or cause")
     private val exceptions: List<String> by config(
@@ -64,12 +57,11 @@ class ThrowingExceptionsWithoutMessageOrCause(config: Config = Config.empty) : R
     )
 
     override fun visitCallExpression(expression: KtCallExpression) {
-        val calleeExpressionText = expression.calleeExpression?.text
-        if (exceptions.any { calleeExpressionText?.equals(it, ignoreCase = true) == true } &&
-            expression.valueArguments.isEmpty()
-        ) {
-            report(CodeSmell(issue, Entity.from(expression), issue.description))
-        }
         super.visitCallExpression(expression)
+        val calleeExpressionText = expression.calleeExpression?.text ?: return
+
+        if (exceptions.any { calleeExpressionText == it } && expression.valueArguments.isEmpty()) {
+            report(Finding(Entity.from(expression), description))
+        }
     }
 }

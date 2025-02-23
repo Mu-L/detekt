@@ -1,18 +1,37 @@
 package io.gitlab.arturbosch.detekt.cli
 
 import com.beust.jcommander.Parameter
+import com.beust.jcommander.converters.PathConverter
+import io.github.detekt.tooling.api.AnalysisMode
+import io.github.detekt.tooling.api.spec.RulesSpec
+import io.github.detekt.tooling.api.spec.RulesSpec.FailurePolicy.FailOnSeverity
+import io.github.detekt.tooling.api.spec.RulesSpec.FailurePolicy.NeverFail
+import org.jetbrains.kotlin.config.ApiVersion
 import org.jetbrains.kotlin.config.JvmTarget
 import org.jetbrains.kotlin.config.LanguageVersion
+import java.net.URL
 import java.nio.file.Path
+import kotlin.io.path.Path
 
 class CliArgs {
 
     @Parameter(
         names = ["--input", "-i"],
+        converter = PathConverter::class,
+        splitter = PathSplitter::class,
+        validateValueWith = [PathValidator::class],
         description = "Input paths to analyze. Multiple paths are separated by comma. If not specified the " +
             "current working directory is used."
     )
-    var input: String? = null
+    var inputPaths: List<Path> = listOf(Path(System.getProperty("user.dir")))
+
+    @Parameter(
+        names = ["--analysis-mode"],
+        description = "Analysis mode used by detekt. " +
+            "'full' analysis mode is comprehensive but requires the correct compiler options to be provided. " +
+            "'light' analysis cannot utilise compiler information and some rules cannot be run in this mode."
+    )
+    var analysisMode: AnalysisMode = AnalysisMode.light
 
     @Parameter(
         names = ["--includes", "-in"],
@@ -29,29 +48,37 @@ class CliArgs {
 
     @Parameter(
         names = ["--config", "-c"],
+        converter = PathConverter::class,
+        splitter = PathSplitter::class,
+        validateValueWith = [PathValidator::class],
         description = "Path to the config file (path/to/config.yml). " +
             "Multiple configuration files can be specified with ',' or ';' as separator."
     )
-    var config: String? = null
+    var config: List<Path> = emptyList()
 
     @Parameter(
         names = ["--config-resource", "-cr"],
+        converter = ClasspathResourceConverter::class,
+        splitter = PathSplitter::class,
         description = "Path to the config resource on detekt's classpath (path/to/config.yml)."
     )
-    var configResource: String? = null
+    var configResource: List<URL> = emptyList()
 
     @Parameter(
         names = ["--generate-config", "-gc"],
-        description = "Export default config. " +
-            "Path can be specified with --config option (default path: default-detekt-config.yml)"
+        description = "Export default config to the provided path.",
+        converter = PathConverter::class,
     )
-    var generateConfig: Boolean = false
+    var generateConfig: Path? = null
 
     @Parameter(
         names = ["--plugins", "-p"],
+        converter = PathConverter::class,
+        splitter = PathSplitter::class,
+        validateValueWith = [PathValidator::class],
         description = "Extra paths to plugin jars separated by ',' or ';'."
     )
-    var plugins: String? = null
+    var plugins: List<Path> = emptyList()
 
     @Parameter(
         names = ["--parallel"],
@@ -64,7 +91,7 @@ class CliArgs {
     @Parameter(
         names = ["--baseline", "-b"],
         description = "If a baseline xml file is passed in," +
-            " only new code smells not in the baseline are printed in the console.",
+            " only new findings not in the baseline are printed in the console.",
         converter = PathConverter::class
     )
     var baseline: Path? = null
@@ -77,22 +104,33 @@ class CliArgs {
 
     @Parameter(
         names = ["--report", "-r"],
+        converter = ReportPathConverter::class,
         description = "Generates a report for given 'report-id' and stores it on given 'path'. " +
             "Entry should consist of: [report-id:path]. " +
-            "Available 'report-id' values: 'txt', 'xml', 'html', 'sarif'. " +
+            "Available 'report-id' values: 'xml', 'html', 'md', 'sarif'. " +
             "These can also be used in combination with each other " +
-            "e.g. '-r txt:reports/detekt.txt -r xml:reports/detekt.xml'"
+            "e.g. '-r html:reports/detekt.html -r xml:reports/detekt.xml'"
     )
-    private var reports: List<String>? = null
+    var reportPaths: List<ReportPath> = emptyList()
+
+    @Parameter(
+        names = ["--fail-on-severity"],
+        description = "Specifies the minimum severity that causes the build to fail. " +
+            "When the value is set to 'Never' detekt will not fail regardless of the number " +
+            "of issues and their severities.",
+        converter = FailureSeverityConverter::class
+    )
+    var failOnSeverity: FailureSeverity = FailureSeverity.Error
 
     @Parameter(
         names = ["--base-path", "-bp"],
         description = "Specifies a directory as the base path." +
             "Currently it impacts all file paths in the formatted reports. " +
-            "File paths in console output and txt report are not affected and remain as absolute paths.",
+            "File paths in console output are not affected and remain as absolute paths.",
+        validateValueWith = [DirectoryValidator::class],
         converter = PathConverter::class
     )
-    var basePath: Path? = null
+    var basePath: Path = Path(System.getProperty("user.dir"))
 
     @Parameter(
         names = ["--disable-default-rulesets", "-dd"],
@@ -108,27 +146,10 @@ class CliArgs {
     var buildUponDefaultConfig: Boolean = false
 
     @Parameter(
-        names = ["--fail-fast"],
-        description = "DEPRECATED: please use '--build-upon-default-config' together with '--all-rules'. " +
-            "Same as 'build-upon-default-config' but explicitly running all available rules. " +
-            "With this setting only exit code 0 is returned when the analysis does not find a single code smell. " +
-            "Additional configuration files can override rule properties which includes turning off specific rules."
-    )
-    @Deprecated("Please use the buildUponDefaultConfig and allRules flags instead.", ReplaceWith("allRules"))
-    var failFast: Boolean = false
-
-    @Parameter(
         names = ["--all-rules"],
         description = "Activates all available (even unstable) rules."
     )
     var allRules: Boolean = false
-
-    // nullable for 1.x.x to prefer maxIssues from config file
-    @Parameter(
-        names = ["--max-issues"],
-        description = "Return exit code 0 only when found issues count does not exceed specified issues count."
-    )
-    var maxIssues: Int? = null
 
     @Parameter(
         names = ["--auto-correct", "-ac"],
@@ -154,44 +175,54 @@ class CliArgs {
 
     @Parameter(
         names = ["--run-rule"],
-        description = "Specify a rule by [RuleSet:Rule] pattern and run it on input.",
+        description = "Specify a rule by [RuleSet:RuleId] pattern and run it on input.",
         hidden = true
     )
     var runRule: String? = null
-
-    @Parameter(
-        names = ["--print-ast"],
-        description = "Prints the AST for given [input] file. Must be no directory.",
-        hidden = true
-    )
-    var printAst: Boolean = false
 
     /*
         The following @Parameters are used for type resolution. When additional parameters are required the
         names should mirror the names found in this file (e.g. "classpath", "language-version", "jvm-target"):
         https://github.com/JetBrains/kotlin/blob/master/compiler/cli/cli-common/src/org/jetbrains/kotlin/cli/common/arguments/K2JVMCompilerArguments.kt
-    */
+     */
     @Parameter(
         names = ["--classpath", "-cp"],
-        description = "EXPERIMENTAL: Paths where to find user class files and depending jar files. " +
+        description = "Paths where to find user class files and depending jar files. " +
             "Used for type resolution."
     )
     var classpath: String? = null
 
     @Parameter(
+        names = ["--api-version"],
+        converter = ApiVersionConverter::class,
+        description = "Kotlin API version used by the code under analysis. Some rules use this " +
+            "information to provide more specific rule violation messages."
+    )
+    var apiVersion: ApiVersion? = null
+
+    @Parameter(
         names = ["--language-version"],
         converter = LanguageVersionConverter::class,
-        description = "EXPERIMENTAL: Compatibility mode for Kotlin language version X.Y, reports errors for all " +
+        description = "Compatibility mode for Kotlin language version X.Y, reports errors for all " +
             "language features that came out later"
     )
     var languageVersion: LanguageVersion? = null
 
     @Parameter(
         names = ["--jvm-target"],
-        description = "EXPERIMENTAL: Target version of the generated JVM bytecode that was generated during " +
-            "compilation and is now being used for type resolution (1.6, 1.8, 9, 10, 11, 12, 13, 14, 15 or 16)"
+        converter = JvmTargetConverter::class,
+        description = "Target version of the generated JVM bytecode that was generated during " +
+            "compilation and is now being used for type resolution"
     )
-    var jvmTarget: String = JvmTarget.DEFAULT.description
+    var jvmTarget: JvmTarget = JvmTarget.DEFAULT
+
+    @Parameter(
+        names = ["--jdk-home"],
+        description = "Use a custom JDK home directory to include into the classpath",
+        validateValueWith = [DirectoryValidator::class],
+        converter = PathConverter::class
+    )
+    var jdkHome: Path? = null
 
     @Parameter(
         names = ["--version"],
@@ -199,19 +230,18 @@ class CliArgs {
     )
     var showVersion: Boolean = false
 
-    val inputPaths: List<Path> by lazy {
-        MultipleExistingPathConverter().convert(input ?: System.getProperty("user.dir"))
-    }
+    @Parameter(description = "Options to pass to the Kotlin compiler.", hidden = true)
+    var freeCompilerArgs: List<String> = mutableListOf()
 
-    val reportPaths: List<ReportPath> by lazy {
-        reports?.map { ReportPath.from(it) }.orEmpty()
-    }
+    val failurePolicy: RulesSpec.FailurePolicy
+        get() {
+            return when (val minSeverity = failOnSeverity) {
+                FailureSeverity.Never -> NeverFail
 
-    companion object {
-        /**
-         * When embedding the cli inside a tool, this closure style configuration
-         * of the arguments should be used.
-         */
-        operator fun invoke(init: CliArgs.() -> Unit): CliArgs = CliArgs().apply(init)
-    }
+                FailureSeverity.Error,
+                FailureSeverity.Warning,
+                FailureSeverity.Info,
+                -> FailOnSeverity(minSeverity.toSeverity())
+            }
+        }
 }

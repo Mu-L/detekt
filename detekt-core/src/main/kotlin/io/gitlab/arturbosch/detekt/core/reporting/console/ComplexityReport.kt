@@ -7,10 +7,11 @@ import io.gitlab.arturbosch.detekt.api.Detektion
 /**
  * Contains metrics concerning the analyzed code.
  * For instance the source lines of code and the McCabe complexity are calculated.
- * See: https://detekt.github.io/detekt/configurations.html#console-reports
+ * See: https://detekt.dev/configurations.html#console-reports
  */
-class ComplexityReport : ConsoleReport() {
+class ComplexityReport : ConsoleReport {
 
+    override val id: String = "ComplexityReport"
     override val priority: Int = 20
 
     override fun render(detektion: Detektion): String? {

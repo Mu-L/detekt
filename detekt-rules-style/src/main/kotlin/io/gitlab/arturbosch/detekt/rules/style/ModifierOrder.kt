@@ -1,14 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import org.jetbrains.kotlin.com.intellij.psi.PsiWhiteSpace
+import org.jetbrains.kotlin.lexer.KtModifierKeywordToken
 import org.jetbrains.kotlin.lexer.KtTokens.ABSTRACT_KEYWORD
 import org.jetbrains.kotlin.lexer.KtTokens.ACTUAL_KEYWORD
 import org.jetbrains.kotlin.lexer.KtTokens.ANNOTATION_KEYWORD
@@ -41,7 +38,7 @@ import org.jetbrains.kotlin.psi.psiUtil.allChildren
 
 /**
  * This rule reports cases in the code where modifiers are not in the correct order. The default modifier order is
- * taken from: https://kotlinlang.org/docs/coding-conventions.html#modifiers-order
+ * taken from: [Modifiers order](https://kotlinlang.org/docs/coding-conventions.html#modifiers-order)
  *
  * <noncompliant>
  * lateinit internal val str: String
@@ -52,14 +49,10 @@ import org.jetbrains.kotlin.psi.psiUtil.allChildren
  * </compliant>
  */
 @ActiveByDefault(since = "1.0.0")
-class ModifierOrder(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Modifiers are not in the correct order.",
-        Debt.FIVE_MINS
-    )
+class ModifierOrder(config: Config) : Rule(
+    config,
+    "Modifiers are not in the correct order. Consider to reorder these modifiers."
+) {
 
     // subset of KtTokens.MODIFIER_KEYWORDS_ARRAY
     private val order = arrayOf(
@@ -86,26 +79,15 @@ class ModifierOrder(config: Config = Config.empty) : Rule(config) {
         super.visitModifierList(list)
 
         val modifiers = list.allChildren
-            .filter { it !is PsiWhiteSpace }
+            .mapNotNull { it.node.elementType as? KtModifierKeywordToken }
             .toList()
 
-        val sortedModifiers = modifiers.sortedWith(compareBy { order.indexOf(it.node.elementType) })
+        val sortedModifiers = modifiers.sortedWith(compareBy { order.indexOf(it) })
 
         if (modifiers != sortedModifiers) {
-            val modifierString = sortedModifiers.joinToString(" ") { it.text }
+            val modifierString = sortedModifiers.joinToString(" ") { it.value }
 
-            report(
-                CodeSmell(
-                    Issue(
-                        javaClass.simpleName,
-                        Severity.Style,
-                        "Modifier order should be: $modifierString",
-                        Debt(mins = 1)
-                    ),
-                    Entity.from(list),
-                    "Modifier order should be: $modifierString"
-                )
-            )
+            report(Finding(Entity.from(list), "Modifier order should be: $modifierString"))
         }
     }
 }

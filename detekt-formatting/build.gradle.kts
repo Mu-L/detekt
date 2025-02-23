@@ -2,37 +2,49 @@ plugins {
     id("module")
 }
 
+val extraDepsToPackage: Configuration by configurations.creating
+
 dependencies {
-    implementation(projects.detektApi)
+    compileOnly(projects.detektApi)
+    compileOnly(projects.detektPsiUtils)
     implementation(libs.ktlint.rulesetStandard) {
         exclude(group = "org.jetbrains.kotlin")
     }
-    implementation(libs.ktlint.core) {
-        exclude(group = "org.jetbrains.kotlin")
-    }
-    implementation(libs.ktlint.rulesetExperimental) {
-        exclude(group = "org.jetbrains.kotlin")
-    }
+
+    runtimeOnly(libs.slf4j.api)
 
     testImplementation(projects.detektTest)
-    testImplementation(libs.bundles.testImplementation)
+    testImplementation(libs.assertj.core)
+    testImplementation(libs.classgraph)
 
-    testRuntimeOnly(libs.spek.runner)
+    testRuntimeOnly(libs.slf4j.nop)
+    extraDepsToPackage(libs.slf4j.nop)
 }
 
-tasks.build { finalizedBy(":detekt-generator:generateDocumentation") }
+consumeGeneratedConfig(
+    fromProject = projects.detektGenerator,
+    fromConfiguration = "generatedFormattingConfig",
+    forTask = tasks.sourcesJar
+)
+consumeGeneratedConfig(
+    fromProject = projects.detektGenerator,
+    fromConfiguration = "generatedFormattingConfig",
+    forTask = tasks.processResources
+)
 
 val depsToPackage = setOf(
     "org.ec4j.core",
-    "com.pinterest.ktlint"
+    "com.pinterest.ktlint",
+    "io.github.oshai",
 )
 
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE // allow duplicates
-    dependsOn(configurations.runtimeClasspath)
-    from({
+    dependsOn(configurations.runtimeClasspath, extraDepsToPackage)
+    from(
         configurations.runtimeClasspath.get()
             .filter { dependency -> depsToPackage.any { it in dependency.toString() } }
-            .map { if (it.isDirectory) it else zipTree(it) }
-    })
+            .map { if (it.isDirectory) it else zipTree(it) },
+        extraDepsToPackage.map { zipTree(it) },
+    )
 }

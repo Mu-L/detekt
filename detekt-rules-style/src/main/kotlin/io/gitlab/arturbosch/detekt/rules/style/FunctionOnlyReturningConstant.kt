@@ -1,23 +1,18 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.AnnotationExcluder
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.SplitPattern
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
+import io.gitlab.arturbosch.detekt.api.simplePatternToRegex
 import io.gitlab.arturbosch.detekt.rules.isActual
 import io.gitlab.arturbosch.detekt.rules.isOpen
 import io.gitlab.arturbosch.detekt.rules.isOverride
 import org.jetbrains.kotlin.psi.KtConstantExpression
 import org.jetbrains.kotlin.psi.KtExpression
-import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtReturnExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
@@ -36,37 +31,19 @@ import org.jetbrains.kotlin.psi.psiUtil.containingClass
  * </compliant>
  */
 @ActiveByDefault(since = "1.2.0")
-class FunctionOnlyReturningConstant(config: Config = Config.empty) : Rule(config) {
+class FunctionOnlyReturningConstant(config: Config) : Rule(
+    config,
+    "A function that only returns a constant is misleading. Consider declaring a constant instead."
+) {
 
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "A function that only returns a constant is misleading. " +
-            "Consider declaring a constant instead",
-        Debt.TEN_MINS
-    )
-
-    @Configuration("if overriden functions should be ignored")
+    @Configuration("if overridden functions should be ignored")
     private val ignoreOverridableFunction: Boolean by config(true)
 
     @Configuration("if actual functions should be ignored")
     private val ignoreActualFunction: Boolean by config(true)
 
     @Configuration("excluded functions")
-    private val excludedFunctions: SplitPattern by config("") { SplitPattern(it) }
-
-    @Configuration("allows to provide a list of annotations that disable this check")
-    @Deprecated("Use `ignoreAnnotated` instead")
-    private val excludeAnnotatedFunction: List<String> by config(emptyList<String>()) { functions ->
-        functions.map { it.removePrefix("*").removeSuffix("*") }
-    }
-
-    private lateinit var annotationExcluder: AnnotationExcluder
-
-    override fun visit(root: KtFile) {
-        annotationExcluder = AnnotationExcluder(root, @Suppress("DEPRECATION") excludeAnnotatedFunction)
-        super.visit(root)
-    }
+    private val excludedFunctions: List<Regex> by config(emptyList<String>()) { it.map(String::simplePatternToRegex) }
 
     override fun visitNamedFunction(function: KtNamedFunction) {
         if (isNotIgnored(function) &&
@@ -74,8 +51,7 @@ class FunctionOnlyReturningConstant(config: Config = Config.empty) : Rule(config
             isReturningAConstant(function)
         ) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.atName(function),
                     "${function.nameAsSafeName} is returning a constant. Prefer declaring a constant instead."
                 )
@@ -107,7 +83,7 @@ class FunctionOnlyReturningConstant(config: Config = Config.empty) : Rule(config
         }
 
     private fun isNotExcluded(function: KtNamedFunction) =
-        !excludedFunctions.contains(function.name) && !annotationExcluder.shouldExclude(function.annotationEntries)
+        function.name !in excludedFunctions
 
     private fun isReturningAConstant(function: KtNamedFunction) =
         isConstantExpression(function.bodyExpression) || returnsConstant(function)
@@ -124,3 +100,5 @@ class FunctionOnlyReturningConstant(config: Config = Config.empty) : Rule(config
         return isConstantExpression(returnExpression?.returnedExpression)
     }
 }
+
+private operator fun Iterable<Regex>.contains(input: String?): Boolean = input != null && any { it.matches(input) }

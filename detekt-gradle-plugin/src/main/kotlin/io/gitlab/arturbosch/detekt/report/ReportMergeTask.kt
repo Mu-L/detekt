@@ -1,5 +1,7 @@
 package io.gitlab.arturbosch.detekt.report
 
+import io.github.detekt.sarif4k.SarifSerializer
+import io.github.detekt.sarif4k.merge
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
@@ -9,7 +11,6 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
-import java.io.File
 
 @CacheableTask
 abstract class ReportMergeTask : DefaultTask() {
@@ -23,18 +24,23 @@ abstract class ReportMergeTask : DefaultTask() {
 
     @TaskAction
     fun merge() {
+        logger.info("Input")
         logger.info(input.files.joinToString(separator = "\n") { it.absolutePath })
-        val existingFiles = input.files.filter { it.exists() }
-        fun isXmlReport(file: File): Boolean = file.name.endsWith(".xml")
-        if (existingFiles.any(::isXmlReport)) {
-            XmlReportMerger.merge(existingFiles.filter(::isXmlReport), output.get().asFile)
+        logger.info("Output = ${output.get().asFile.absolutePath}")
+        val existingFiles = input.filter { it.exists() }
+
+        val xmls = existingFiles.filter { it.extension == "xml" }
+        if (!xmls.isEmpty) {
+            XmlReportMerger.merge(xmls.files, output.get().asFile)
             logger.lifecycle("Merged XML output to ${output.get().asFile.absolutePath}")
         }
 
-        fun isSarifReport(file: File): Boolean = file.name.endsWith(".sarif") ||
-            file.name.endsWith(".sarif.json")
-        if (existingFiles.any(::isSarifReport)) {
-            SarifReportMerger.merge(existingFiles.filter(::isSarifReport), output.get().asFile)
+        val sarifs = existingFiles.filter { it.extension == "sarif" || it.name.endsWith(".sarif.json") }
+        if (!sarifs.isEmpty) {
+            val sarif = sarifs
+                .map { SarifSerializer.fromJson(it.readText()) }
+                .reduce { acc, next -> acc.merge(next) }
+            output.get().asFile.writeText(SarifSerializer.toJson(sarif))
             logger.lifecycle("Merged SARIF output to ${output.get().asFile.absolutePath}")
         }
     }

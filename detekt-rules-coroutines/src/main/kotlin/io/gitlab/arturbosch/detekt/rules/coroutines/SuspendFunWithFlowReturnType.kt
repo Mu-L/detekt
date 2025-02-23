@@ -1,19 +1,15 @@
 package io.gitlab.arturbosch.detekt.rules.coroutines
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
-import io.gitlab.arturbosch.detekt.rules.fqNameOrNull
+import io.gitlab.arturbosch.detekt.rules.coroutines.utils.isCoroutinesFlow
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.types.KotlinType
-import org.jetbrains.kotlin.types.typeUtil.supertypes
 
 /**
  * Functions that return `Flow` from `kotlinx.coroutines.flow` should not be marked as `suspend`.
@@ -58,41 +54,27 @@ import org.jetbrains.kotlin.types.typeUtil.supertypes
  * </compliant>
  *
  */
-@RequiresTypeResolution
-class SuspendFunWithFlowReturnType(config: Config) : Rule(config) {
-
-    override val issue = Issue(
-        id = "SuspendFunWithFlowReturnType",
-        severity = Severity.Minor,
-        description = "`suspend` modifier should not be used for functions that return a " +
-            "Coroutines Flow type. Flows are cold streams and invoking a function that returns " +
-            "one should not produce any side effects.",
-        debt = Debt.TEN_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class SuspendFunWithFlowReturnType(config: Config) :
+    Rule(
+        config,
+        "The `suspend` modifier should not be used for functions that return a Coroutines Flow type. Flows are cold " +
+            "streams and invoking a function that returns one should not produce any side effects."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitNamedFunction(function: KtNamedFunction) {
-        if (bindingContext == BindingContext.EMPTY) return
         val suspendModifier = function.modifierList?.getModifier(KtTokens.SUSPEND_KEYWORD) ?: return
         bindingContext[BindingContext.FUNCTION, function]
             ?.returnType
             ?.takeIf { it.isCoroutinesFlow() }
             ?.also {
                 report(
-                    CodeSmell(
-                        issue = issue,
+                    Finding(
                         entity = Entity.from(suspendModifier),
                         message = "`suspend` function returns Coroutines Flow."
                     )
                 )
             }
-    }
-
-    private fun KotlinType.isCoroutinesFlow(): Boolean {
-        return sequence {
-            yield(this@isCoroutinesFlow)
-            yieldAll(this@isCoroutinesFlow.supertypes())
-        }
-            .mapNotNull { it.fqNameOrNull()?.asString() }
-            .contains("kotlinx.coroutines.flow.Flow")
     }
 }

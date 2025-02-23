@@ -1,30 +1,50 @@
 package io.gitlab.arturbosch.detekt.core.config
 
 import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.core.config.validation.DeprecatedRule
+import io.gitlab.arturbosch.detekt.core.config.validation.ValidatableConfiguration
+import io.gitlab.arturbosch.detekt.core.config.validation.validateConfig
+import io.gitlab.arturbosch.detekt.core.util.indentCompat
 
 @Suppress("UNCHECKED_CAST")
 internal data class AllRulesConfig(
-    private val originalConfig: Config,
-    private val defaultConfig: Config
+    private val wrapped: Config,
+    private val deprecatedRules: Set<DeprecatedRule>,
+    override val parent: Config? = null,
 ) : Config, ValidatableConfiguration {
 
+    override val parentPath: String?
+        get() = wrapped.parentPath
+
     override fun subConfig(key: String) =
-        AllRulesConfig(originalConfig.subConfig(key), defaultConfig.subConfig(key))
+        AllRulesConfig(wrapped.subConfig(key), deprecatedRules, this)
 
-    override fun <T : Any> valueOrDefault(key: String, default: T): T {
-        return when (key) {
-            Config.ACTIVE_KEY -> originalConfig.valueOrDefault(key, true) as T
-            else -> originalConfig.valueOrDefault(key, defaultConfig.valueOrDefault(key, default))
-        }
-    }
+    override fun subConfigKeys(): Set<String> = wrapped.subConfigKeys()
 
-    override fun <T : Any> valueOrNull(key: String): T? {
-        return when (key) {
-            Config.ACTIVE_KEY -> originalConfig.valueOrNull(key) ?: true as? T
-            else -> originalConfig.valueOrNull(key) ?: defaultConfig.valueOrNull(key)
+    override fun <T : Any> valueOrDefault(key: String, default: T): T =
+        when (key) {
+            Config.ACTIVE_KEY -> if (isDeprecated()) false as T else wrapped.valueOrDefault(key, true) as T
+            else -> wrapped.valueOrDefault(key, default)
         }
-    }
+
+    override fun <T : Any> valueOrNull(key: String): T? =
+        when (key) {
+            Config.ACTIVE_KEY -> if (isDeprecated()) false as T else wrapped.valueOrNull(key) ?: true as? T
+            else -> wrapped.valueOrNull(key)
+        }
 
     override fun validate(baseline: Config, excludePatterns: Set<Regex>) =
-        validateConfig(originalConfig, baseline, excludePatterns)
+        validateConfig(wrapped, baseline, excludePatterns)
+
+    private fun isDeprecated(): Boolean = deprecatedRules.any { parentPath == it.toPath() }
+
+    private fun DeprecatedRule.toPath() = "$ruleSetId > $ruleName"
+
+    @Suppress("MagicNumber")
+    override fun toString() = """
+        AllRulesConfig(
+            wrapped=${wrapped.toString().indentCompat(12).trim()},
+            deprecatedRules=$deprecatedRules,
+        )
+    """.trimIndent()
 }

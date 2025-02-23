@@ -1,190 +1,242 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.rules.setupKotlinEnvironment
+import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.rules.KotlinCoreEnvironmentTest
 import io.gitlab.arturbosch.detekt.test.assertThat
-import io.gitlab.arturbosch.detekt.test.compileAndLintWithContext
+import io.gitlab.arturbosch.detekt.test.lintWithContext
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 
-class UseOrEmptySpec : Spek({
-    setupKotlinEnvironment()
-    val env: KotlinCoreEnvironment by memoized()
-    val subject by memoized { UseOrEmpty() }
+@KotlinCoreEnvironmentTest
+class UseOrEmptySpec(val env: KotlinCoreEnvironment) {
+    val subject = UseOrEmpty(Config.empty)
 
-    describe("report UseOrEmptySpec rule") {
-        it("emptyList") {
+    @Nested
+    inner class `report UseOrEmptySpec rule` {
+        @Test
+        fun emptyList() {
             val code = """
                 fun test(x: List<Int>?) {
                     val a = x ?: emptyList()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(2, 13)
-            assertThat(findings[0]).hasMessage("This '?: emptyList()' can be replaced with 'orEmpty()' call")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("This '?: emptyList()' can be replaced with 'orEmpty()' call")
+            assertThat(findings).hasStartSourceLocation(2, 13)
         }
 
-        it("emptySet") {
+        @Test
+        fun emptySet() {
             val code = """
                 fun test(x: Set<Int>?) {
                     val a = x ?: emptySet()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("emptyMap") {
+        @Test
+        fun emptyMap() {
             val code = """
                 fun test(x: Map<Int, String>?) {
                     val a = x ?: emptyMap()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("emptySequence") {
+        @Test
+        fun emptySequence() {
             val code = """
                 fun test(x: Sequence<Int>?) {
                     val a = x ?: emptySequence()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("emptyArray") {
+        @Test
+        fun emptyArray() {
             val code = """
                 fun test(x: Array<Int>?) {
                     val a = x ?: emptyArray()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("listOf") {
+        @Test
+        fun listOf() {
             val code = """
                 fun test(x: List<Int>?) {
                     val a = x ?: listOf()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("setOf") {
+        @Test
+        fun setOf() {
             val code = """
                 fun test(x: Set<Int>?) {
                     val a = x ?: setOf()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("mapOf") {
+        @Test
+        fun mapOf() {
             val code = """
                 fun test(x: Map<Int, String>?) {
                     val a = x ?: mapOf()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("sequenceOf") {
+        @Test
+        fun sequenceOf() {
             val code = """
                 fun test(x: Sequence<Int>?) {
                     val a = x ?: sequenceOf()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("arrayOf") {
+        @Test
+        fun arrayOf() {
             val code = """
                 fun test(x: Array<Int>?) {
                     val a = x ?: arrayOf()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("empty string") {
+        @Test
+        fun `empty string`() {
             val code = """
                 fun test(x: String?) {
                     val a = x ?: ""
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("mutable list") {
+        @Test
+        fun `mutable list`() {
             val code = """
                 fun test(x: MutableList<Int>?) {
                     val a = x ?: emptyList()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).hasSize(1)
+        }
+
+        @Test
+        fun `indexing operator call`() {
+            val code = """
+                class C {
+                    operator fun get(key: String): List<Int>? = null
+                }
+                fun test(c: C) {
+                    c["key"] ?: emptyList()
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
     }
 
-    describe("does not report UseOrEmptySpec rule") {
-        it("not null") {
+    @Nested
+    inner class `does not report UseOrEmptySpec rule` {
+        @Test
+        fun `not null`() {
             val code = """
                 fun test(x: List<Int>) {
                     val a = x ?: emptyList()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("not empty") {
+        @Test
+        fun `not empty`() {
             val code = """
                 fun test(x: List<Int>?) {
                     val a = x ?: listOf(1)
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("different types") {
+        @Test
+        fun `different types`() {
             val code = """
                 fun test(x: List<Int>?) {
                     val a = x ?: emptySet()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+                fun test(c: Any?) {
+                    val x = c ?: emptyList<Int>()
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("mutableListOf") {
+        @Test
+        fun mutableListOf() {
             val code = """
                 fun test(x: MutableList<Int>?) {
                     val a = x ?: mutableListOf()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("intArrayOf") {
+        @Test
+        fun intArrayOf() {
             val code = """
                 fun test(x: IntArray?) {
                     val a = x ?: intArrayOf()
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `indexing operator call with type parameter`() {
+            val code = """
+                class C {
+                    operator fun <T> get(key: String): List<T>? = null
+                }
+                fun test(c: C) {
+                    val x = c["key"] ?: emptyList<Int>()
+                    val y: List<Int> = c["key"] ?: emptyList()
+                    val z = (c["key"]) ?: emptyList<Int>()
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
     }
-})
+}

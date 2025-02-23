@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtDeclaration
@@ -34,14 +31,11 @@ import org.jetbrains.kotlin.psi.psiUtil.getChildrenOfType
  * </compliant>
  */
 @ActiveByDefault(since = "1.0.0")
-class OptionalAbstractKeyword(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Unnecessary abstract modifier in interface",
-        Debt.FIVE_MINS
-    )
+class OptionalAbstractKeyword(config: Config) : Rule(
+    config,
+    "Unnecessary abstract modifier in interface detected. " +
+        "This abstract modifier is unnecessary and thus can be removed."
+) {
 
     override fun visitClass(klass: KtClass) {
         if (klass.isInterface()) {
@@ -57,7 +51,7 @@ class OptionalAbstractKeyword(config: Config = Config.empty) : Rule(config) {
 
     private fun handleAbstractKeyword(dcl: KtDeclaration) {
         dcl.modifierList?.getModifier(KtTokens.ABSTRACT_KEYWORD)?.let {
-            report(CodeSmell(issue, Entity.from(it), "The abstract keyword on this declaration is unnecessary."))
+            report(Finding(Entity.from(it), "The abstract keyword on this declaration is unnecessary."))
         }
     }
 }

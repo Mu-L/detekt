@@ -1,12 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.documentation
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.psi.KtDeclaration
 
 /**
@@ -38,22 +35,18 @@ import org.jetbrains.kotlin.psi.KtDeclaration
  * }
  * </compliant>
  */
-class DeprecatedBlockTag(config: Config = Config.empty) : Rule(config) {
-    override val issue = Issue(
-        "DeprecatedBlockTag",
-        Severity.Defect,
-        "Do not use the @deprecated block tag, which is not supported by KDoc. " +
-            "Use the @Deprecated annotation instead.",
-        Debt.FIVE_MINS
-    )
+class DeprecatedBlockTag(config: Config) : Rule(
+    config,
+    "Do not use the `@deprecated` block tag, which is not supported by KDoc. " +
+        "Use the `@Deprecated` annotation instead."
+) {
 
     override fun visitDeclaration(dcl: KtDeclaration) {
         super.visitDeclaration(dcl)
         dcl.docComment?.getAllSections()?.forEach { section ->
             section.findTagsByName("deprecated").forEach { tag ->
                 report(
-                    CodeSmell(
-                        issue,
+                    Finding(
                         Entity.from(dcl),
                         "@deprecated tag block does not properly report deprecation in Kotlin, use @Deprecated " +
                             "annotation instead",

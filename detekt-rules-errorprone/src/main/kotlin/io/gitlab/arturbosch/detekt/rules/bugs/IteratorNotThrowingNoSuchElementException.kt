@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
@@ -45,23 +42,18 @@ import org.jetbrains.kotlin.psi.psiUtil.getSuperNames
  * </compliant>
  */
 @ActiveByDefault(since = "1.2.0")
-class IteratorNotThrowingNoSuchElementException(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "IteratorNotThrowingNoSuchElementException",
-        Severity.Defect,
-        "The next() method of an Iterator implementation should throw a NoSuchElementException " +
-            "when there are no more elements to return",
-        Debt.TEN_MINS
-    )
+class IteratorNotThrowingNoSuchElementException(config: Config) : Rule(
+    config,
+    "The `next()` method of an `Iterator` implementation should throw a `NoSuchElementException` " +
+        "when there are no more elements to return."
+) {
 
     override fun visitClassOrObject(classOrObject: KtClassOrObject) {
         if (classOrObject.getSuperNames().contains("Iterator")) {
             val nextMethod = classOrObject.findFunctionByName("next")
             if (nextMethod != null && !nextMethod.throwsNoSuchElementExceptionThrown()) {
                 report(
-                    CodeSmell(
-                        issue,
+                    Finding(
                         Entity.atName(classOrObject),
                         "This implementation of Iterator does not correctly implement the next() method as " +
                             "it doesn't throw a NoSuchElementException when no elements remain in the Iterator."

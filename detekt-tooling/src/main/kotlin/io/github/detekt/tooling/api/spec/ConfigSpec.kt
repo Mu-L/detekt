@@ -10,14 +10,7 @@ interface ConfigSpec {
      *
      * Unknown properties to detekt will get reported as errors.
      */
-    val shouldValidateBeforeAnalysis: Boolean
-
-    /**
-     * Property patterns which should be excluded from validation.
-     *
-     * Nested yaml properties are separated with a '>': e.g. '.*>.*>excludeThisProp', 'customPart>.*'
-     */
-    val knownPatterns: Collection<String>
+    val shouldValidateBeforeAnalysis: Boolean?
 
     /**
      * Rely on detekt to configure meaningful defaults.

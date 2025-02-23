@@ -6,18 +6,19 @@ import io.gitlab.arturbosch.detekt.api.FileProcessListener
 import io.gitlab.arturbosch.detekt.api.ProjectMetric
 import org.jetbrains.kotlin.com.intellij.openapi.util.Key
 import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.resolve.BindingContext
 
 class PackageCountProcessor : FileProcessListener {
 
     private val visitor = PackageCountVisitor()
     private val key = numberOfPackagesKey
 
-    override fun onProcess(file: KtFile, bindingContext: BindingContext) {
+    override val id: String = "PackageCountProcessor"
+
+    override fun onProcess(file: KtFile) {
         file.accept(visitor)
     }
 
-    override fun onFinish(files: List<KtFile>, result: Detektion, bindingContext: BindingContext) {
+    override fun onFinish(files: List<KtFile>, result: Detektion) {
         val count = files
             .mapNotNull { it.getUserData(key) }
             .distinct()

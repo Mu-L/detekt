@@ -1,81 +1,81 @@
 package io.gitlab.arturbosch.detekt.formatting
 
+import io.github.detekt.test.utils.compileForTest
 import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.formatting.wrappers.ChainWrapping
 import io.gitlab.arturbosch.detekt.formatting.wrappers.NoLineBreakBeforeAssignment
-import io.gitlab.arturbosch.detekt.test.assertThat
+import io.gitlab.arturbosch.detekt.test.lint
+import io.gitlab.arturbosch.detekt.test.location
 import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
-import java.nio.file.Paths
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import kotlin.io.path.Path
+import kotlin.io.path.absolute
 
-class FormattingRuleSpec : Spek({
+class FormattingRuleSpec {
 
-    val subject by memoized { NoLineBreakBeforeAssignment(Config.empty) }
+    private lateinit var subject: NoLineBreakBeforeAssignment
 
-    describe("formatting rules can be suppressed") {
+    @BeforeEach
+    fun createSubject() {
+        subject = NoLineBreakBeforeAssignment(Config.empty)
+    }
 
-        it("does support suppression only on file level") {
+    @Nested
+    inner class `formatting rules can be suppressed` {
+
+        @Test
+        fun `support suppression on node level`() {
             val findings = subject.lint(
                 """
-                @file:Suppress("NoLineBreakBeforeAssignment")
-                fun main() 
-                = Unit
+                    @Suppress("NoLineBreakBeforeAssignment")
+                    fun main()
+                    = Unit
                 """.trimIndent()
             )
 
             assertThat(findings).isEmpty()
         }
+    }
 
-        it("does not support suppression on node level") {
+    @Nested
+    inner class `formatting rules have a signature` {
+
+        @Test
+        fun `in a file without package name`() {
             val findings = subject.lint(
                 """
-                @Suppress("NoLineBreakBeforeAssignment")
-                fun main() 
-                = Unit
+                    fun main()
+                    = Unit
                 """.trimIndent()
             )
 
-            assertThat(findings).hasSize(1)
+            assertThat(findings.first().entity.signature).isEqualTo("=")
         }
-    }
 
-    describe("formatting rules have a signature") {
-
-        it("has no package name") {
+        @Test
+        fun `with a file with package name`() {
             val findings = subject.lint(
                 """
-                fun main() 
-                = Unit
+                    package test.test.test
+                    fun main()
+                    = Unit
                 """.trimIndent()
             )
 
-            assertThat(findings.first().signature).isEqualTo("Test.kt:2")
-        }
-
-        it("has a package name") {
-            val findings = subject.lint(
-                """
-                package test.test.test
-                fun main() 
-                = Unit
-                """.trimIndent()
-            )
-
-            assertThat(findings.first().signature).isEqualTo("test.test.test.Test.kt:3")
+            assertThat(findings.first().entity.signature).isEqualTo("=")
         }
     }
 
-    test("#3063: formatting issues have an absolute path") {
-        val expectedPath = Paths.get("/root/kotlin/test.kt").toString()
+    @Test
+    fun `#3063_ formatting issues have an absolute path`() {
+        val expectedPath = Path("src/test/resources/configTests/chain-wrapping-before.kt").absolute()
 
-        val findings = subject.lint(
-            """
-                fun main()
-                = Unit
-                """,
-            expectedPath
-        )
-
-        assertThat(findings.first().location.filePath.absolutePath.toString()).isEqualTo(expectedPath)
+        val rule = ChainWrapping(Config.empty)
+        val findings = rule.lint(compileForTest(expectedPath))
+        assertThat(findings).anySatisfy { finding ->
+            assertThat(finding.location.path).isEqualTo(expectedPath)
+        }
     }
-})
+}

@@ -1,14 +1,18 @@
 plugins {
     id("module")
-    alias(libs.plugins.binaryCompatibilityValidator)
+    id("public-api")
 }
 
 dependencies {
-    api(libs.kotlin.stdlibJdk8)
-    compileOnly(libs.spek.dsl)
+    api(libs.kotlin.stdlib)
+    api(libs.junit.jupiterApi)
     implementation(projects.detektParser)
-    implementation(projects.detektPsiUtils)
-    implementation(libs.kotlin.scriptRuntime)
-    implementation(libs.kotlin.scriptUtil)
-    implementation(libs.kotlin.scriptingCompilerEmbeddable)
+    implementation(libs.kotlin.mainKts)
+    implementation(libs.kotlinx.coroutinesCore)
+
+    testImplementation(libs.assertj.core)
+}
+
+apiValidation {
+    ignoredPackages.add("io.github.detekt.test.utils.internal")
 }

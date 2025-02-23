@@ -1,9 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.empty
 
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import io.gitlab.arturbosch.detekt.rules.isAllowedExceptionName
 import org.jetbrains.kotlin.psi.KtCatchClause
 
@@ -18,7 +18,7 @@ class EmptyCatchBlock(config: Config) : EmptyRule(
     description =
     "Empty catch block detected. " +
         "Empty catch blocks indicate that an exception is ignored and not handled.",
-    codeSmellMessage =
+    findingMessage =
     "Empty catch block detected. If the exception can be safely ignored, " +
         "name the exception according to one of the exemptions as per the configuration of this rule."
 ) {

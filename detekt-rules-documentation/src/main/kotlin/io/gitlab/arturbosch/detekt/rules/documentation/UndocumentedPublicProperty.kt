@@ -1,16 +1,15 @@
 package io.gitlab.arturbosch.detekt.rules.documentation
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.rules.isPublicInherited
+import io.gitlab.arturbosch.detekt.api.config
+import io.gitlab.arturbosch.detekt.rules.documentation.internal.isPublicInherited
 import io.gitlab.arturbosch.detekt.rules.isPublicNotOverridden
+import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
-import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.psi.KtPrimaryConstructor
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
@@ -22,14 +21,13 @@ import org.jetbrains.kotlin.psi.psiUtil.isPublic
  * If the codebase should have documentation on all public properties enable this rule to enforce this.
  * Overridden properties are excluded by this rule.
  */
-class UndocumentedPublicProperty(config: Config = Config.empty) : Rule(config) {
+class UndocumentedPublicProperty(config: Config) : Rule(
+    config,
+    "Public properties require documentation."
+) {
 
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Maintainability,
-        "Public properties require documentation.",
-        Debt.TWENTY_MINS
-    )
+    @Configuration("if protected functions should be searched")
+    private val searchProtectedProperty: Boolean by config(false)
 
     override fun visitPrimaryConstructor(constructor: KtPrimaryConstructor) {
         if (constructor.isPublicInherited()) {
@@ -43,29 +41,38 @@ class UndocumentedPublicProperty(config: Config = Config.empty) : Rule(config) {
     }
 
     override fun visitProperty(property: KtProperty) {
-        if (property.isPublicInherited() && !property.isLocal && property.shouldBeDocumented()) {
+        if (property.isPublicInherited(searchProtectedProperty) && !property.isLocal && property.shouldBeDocumented()) {
             report(property)
         }
         super.visitProperty(property)
     }
 
-    private fun KtParameter.isUndocumented(comment: String?) =
+    override fun visitEnumEntry(enumEntry: KtEnumEntry) {
+        super.visitEnumEntry(enumEntry)
+        if (enumEntry.isPublicInherited(searchProtectedProperty) && enumEntry.docComment == null) {
+            report(enumEntry)
+        }
+    }
+
+    private fun KtNamedDeclaration.isUndocumented(comment: String?) =
         comment == null || isNotReferenced(comment)
 
-    private fun KtParameter.isNotReferenced(comment: String): Boolean {
+    private fun KtNamedDeclaration.isNotReferenced(comment: String): Boolean {
         val name = nameAsSafeName
         return !comment.contains("[$name]") && !comment.contains("@property $name") && !comment.contains("@param $name")
     }
 
     private fun KtProperty.shouldBeDocumented() =
-        docComment == null && isTopLevelOrInPublicClass() && isPublicNotOverridden()
+        docComment == null &&
+            isTopLevelOrInPublicClass() &&
+            isPublicNotOverridden(searchProtectedProperty) &&
+            this.isUndocumented(this.containingClassOrObject?.docComment?.text)
 
     private fun KtProperty.isTopLevelOrInPublicClass() = isTopLevel || containingClassOrObject?.isPublic == true
 
     private fun report(property: KtNamedDeclaration) {
         report(
-            CodeSmell(
-                issue,
+            Finding(
                 Entity.atName(property),
                 "The property ${property.nameAsSafeName} is missing documentation."
             )

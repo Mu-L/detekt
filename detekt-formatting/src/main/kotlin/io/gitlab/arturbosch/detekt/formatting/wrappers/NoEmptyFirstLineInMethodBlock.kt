@@ -1,16 +1,21 @@
 package io.gitlab.arturbosch.detekt.formatting.wrappers
 
-import com.pinterest.ktlint.ruleset.experimental.NoEmptyFirstLineInMethodBlockRule
+import com.pinterest.ktlint.ruleset.standard.rules.NoEmptyFirstLineInMethodBlockRule
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.internal.AutoCorrectable
 import io.gitlab.arturbosch.detekt.formatting.FormattingRule
 
 /**
- * See <a href="https://ktlint.github.io">ktlint-website</a> for documentation.
+ * See [ktlint docs](https://pinterest.github.io/ktlint/<ktlintVersion/>/rules/standard/#no-leading-empty-lines-in-method-blocks) for
+ * documentation.
  */
 @AutoCorrectable(since = "1.4.0")
-class NoEmptyFirstLineInMethodBlock(config: Config) : FormattingRule(config) {
+@ActiveByDefault(since = "1.22.0")
+class NoEmptyFirstLineInMethodBlock(config: Config) : FormattingRule(
+    config,
+    "Reports methods that have an empty first line."
+) {
 
     override val wrapping = NoEmptyFirstLineInMethodBlockRule()
-    override val issue = issueFor("Reports methods that have an empty first line.")
 }

@@ -1,15 +1,12 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import io.gitlab.arturbosch.detekt.rules.isConstant
 import io.gitlab.arturbosch.detekt.rules.isHashCodeFunction
 import io.gitlab.arturbosch.detekt.rules.isPartOf
@@ -70,17 +67,13 @@ import java.util.Locale
  */
 @Suppress("TooManyFunctions")
 @ActiveByDefault(since = "1.0.0")
-class MagicNumber(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Report magic numbers. Magic number is a numeric literal that is not defined as a constant " +
-            "and hence it's unclear what the purpose of this number is. " +
-            "It's better to declare such numbers as constants and give them a proper name. " +
-            "By default, -1, 0, 1, and 2 are not considered to be magic numbers.",
-        Debt.TEN_MINS
-    )
+class MagicNumber(config: Config) : Rule(
+    config,
+    "Report magic numbers. Magic number is a numeric literal that is not defined as a constant " +
+        "and hence it's unclear what the purpose of this number is. " +
+        "It's better to declare such numbers as constants and give them a proper name. " +
+        "By default, -1, 0, 1, and 2 are not considered to be magic numbers."
+) {
 
     @Configuration("numbers which do not count as magic numbers")
     private val ignoreNumbers: List<Double> by config(listOf("-1", "0", "1", "2")) { numbers ->
@@ -121,7 +114,8 @@ class MagicNumber(config: Config = Config.empty) : Rule(config) {
         val elementType = expression.elementType
         if (elementType != KtNodeTypes.INTEGER_CONSTANT && elementType != KtNodeTypes.FLOAT_CONSTANT) return
 
-        if (isIgnoredByConfig(expression) || expression.isPartOfFunctionReturnConstant() ||
+        if (isIgnoredByConfig(expression) ||
+            expression.isPartOfFunctionReturnConstant() ||
             expression.isPartOfConstructorOrFunctionConstant()
         ) {
             return
@@ -137,8 +131,7 @@ class MagicNumber(config: Config = Config.empty) : Rule(config) {
         val number = parseAsDoubleOrNull(rawNumber)
         if (number != null && !ignoreNumbers.contains(number)) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.from(expression),
                     "This expression contains a magic number." +
                         " Consider defining it to a well named constant."
@@ -176,38 +169,28 @@ class MagicNumber(config: Config = Config.empty) : Rule(config) {
         }
     }
 
-    private fun normalizeForParsingAsDouble(text: String): String {
-        return text.trim()
-            .toLowerCase(Locale.US)
+    private fun normalizeForParsingAsDouble(text: String): String =
+        text.trim()
+            .lowercase(Locale.US)
             .replace("_", "")
             .removeSuffix("l")
             .removeSuffix("d")
             .removeSuffix("f")
-    }
 
     private fun KtConstantExpression.isNamedArgument(): Boolean {
-        /**
-         * The information we need is in the enclosing [KtValueArgument]. When the number being evaluated is
-         * negative, there will be a [KtPrefixExpression] in between the receiver and the [KtValueArgument].
-         */
-        val valueArgument = when (parent) {
-            is KtPrefixExpression -> parent.parent
-            else -> parent
-        } as? KtValueArgument
-
+        val valueArgument = this.getNonStrictParentOfType<KtValueArgument>()
         return valueArgument?.isNamed() == true && isPartOf<KtCallElement>()
     }
 
     private fun KtConstantExpression.isPartOfFunctionReturnConstant() =
         parent is KtNamedFunction || parent is KtReturnExpression && parent.parent.children.size == 1
 
-    private fun KtConstantExpression.isPartOfConstructorOrFunctionConstant(): Boolean {
-        return parent is KtParameter &&
+    private fun KtConstantExpression.isPartOfConstructorOrFunctionConstant(): Boolean =
+        parent is KtParameter &&
             when (parent.parent.parent) {
                 is KtNamedFunction, is KtPrimaryConstructor, is KtSecondaryConstructor -> true
                 else -> false
             }
-    }
 
     private fun KtConstantExpression.isPartOfRange(): Boolean {
         val theParent = parent
@@ -220,9 +203,7 @@ class MagicNumber(config: Config = Config.empty) : Rule(config) {
         }
     }
 
-    private fun KtConstantExpression.isSubjectOfExtensionFunction(): Boolean {
-        return parent is KtDotQualifiedExpression
-    }
+    private fun KtConstantExpression.isSubjectOfExtensionFunction(): Boolean = parent is KtDotQualifiedExpression
 
     private fun KtConstantExpression.isPartOfHashCode(): Boolean {
         val containingFunction = getNonStrictParentOfType<KtNamedFunction>()

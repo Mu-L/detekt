@@ -1,18 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.rules.isPartOf
 import io.gitlab.arturbosch.detekt.rules.isPartOfString
 import org.jetbrains.kotlin.com.intellij.psi.PsiWhiteSpace
-import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateEntryWithExpression
-import org.jetbrains.kotlin.psi.psiUtil.forEachDescendantOfType
 
 /**
  * This rule reports if tabs are used in Kotlin files.
@@ -21,24 +16,19 @@ import org.jetbrains.kotlin.psi.psiUtil.forEachDescendantOfType
  * the only whitespace chars that are allowed in a source file are the line terminator sequence
  * and the ASCII horizontal space character (0x20). Strings containing tabs are allowed.
  */
-class NoTabs(config: Config = Config.empty) : Rule(config) {
+class NoTabs(config: Config) : Rule(
+    config,
+    "Checks if tabs are used in Kotlin files."
+) {
 
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Checks if tabs are used in Kotlin files.",
-        Debt.FIVE_MINS
-    )
-
-    fun findTabs(file: KtFile) {
-        file.forEachDescendantOfType<PsiWhiteSpace> {
-            if (it.isTab()) report(CodeSmell(issue, Entity.from(it), "Tab character is in use."))
+    override fun visitWhiteSpace(space: PsiWhiteSpace) {
+        super.visitWhiteSpace(space)
+        if (space.isTab()) {
+            report(Finding(Entity.from(space), "Tab character is in use."))
         }
     }
 
-    private fun PsiWhiteSpace.isTab(): Boolean {
-        return (!isPartOfString() || isStringInterpolated()) && text.contains('\t')
-    }
+    private fun PsiWhiteSpace.isTab(): Boolean = (!isPartOfString() || isStringInterpolated()) && text.contains('\t')
 
     private fun PsiWhiteSpace.isStringInterpolated(): Boolean =
         this.isPartOf<KtStringTemplateEntryWithExpression>()

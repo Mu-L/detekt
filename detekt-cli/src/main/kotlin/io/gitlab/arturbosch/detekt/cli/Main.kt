@@ -2,23 +2,25 @@
 
 package io.gitlab.arturbosch.detekt.cli
 
+import io.github.detekt.tooling.api.AnalysisResult
 import io.github.detekt.tooling.api.InvalidConfig
-import io.github.detekt.tooling.api.MaxIssuesReached
+import io.github.detekt.tooling.api.IssuesFound
 import io.github.detekt.tooling.api.UnexpectedError
-import io.github.detekt.tooling.api.exitCode
 import io.github.detekt.tooling.internal.NotApiButProbablyUsedByUsers
-import io.gitlab.arturbosch.detekt.cli.runners.AstPrinter
+import io.gitlab.arturbosch.detekt.api.internal.whichKotlin
 import io.gitlab.arturbosch.detekt.cli.runners.ConfigExporter
 import io.gitlab.arturbosch.detekt.cli.runners.Executable
 import io.gitlab.arturbosch.detekt.cli.runners.Runner
 import io.gitlab.arturbosch.detekt.cli.runners.VersionPrinter
+import org.jetbrains.kotlin.config.KotlinCompilerVersion
 import java.io.PrintStream
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     val result = CliRunner().run(args)
+    @Suppress("ForbiddenMethodCall")
     when (val error = result.error) {
-        is InvalidConfig, is MaxIssuesReached -> println(error.message)
+        is InvalidConfig, is IssuesFound -> println(error.message)
         is UnexpectedError -> {
             when (val cause = error.cause) {
                 is HelpRequest -> {
@@ -48,13 +50,26 @@ fun main(args: Array<String>) {
 fun buildRunner(
     args: Array<String>,
     outputPrinter: PrintStream,
-    errorPrinter: PrintStream
+    errorPrinter: PrintStream,
 ): Executable {
+    check(KotlinCompilerVersion.VERSION == whichKotlin()) {
+        """
+            detekt was compiled with Kotlin ${whichKotlin()} but is currently running with ${KotlinCompilerVersion.VERSION}.
+            This is not supported. See https://detekt.dev/docs/gettingstarted/gradle#dependencies for more information.
+        """.trimIndent()
+    }
     val arguments = parseArguments(args)
     return when {
         arguments.showVersion -> VersionPrinter(outputPrinter)
-        arguments.generateConfig -> ConfigExporter(arguments, outputPrinter)
-        arguments.printAst -> AstPrinter(arguments, outputPrinter)
+        arguments.generateConfig != null -> ConfigExporter(arguments, outputPrinter)
         else -> Runner(arguments, outputPrinter, errorPrinter)
     }
+}
+
+@Suppress("detekt.MagicNumber")
+internal fun AnalysisResult.exitCode(): Int = when (error) {
+    is UnexpectedError -> 1
+    is IssuesFound -> 2
+    is InvalidConfig -> 3
+    null -> 0
 }

@@ -1,49 +1,40 @@
 package io.github.detekt.metrics.processors
 
 import io.gitlab.arturbosch.detekt.api.Detektion
-import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.Issue
 import io.gitlab.arturbosch.detekt.api.Notification
 import io.gitlab.arturbosch.detekt.api.ProjectMetric
-import io.gitlab.arturbosch.detekt.api.RuleSetId
+import io.gitlab.arturbosch.detekt.api.RuleInstance
 import org.jetbrains.kotlin.com.intellij.openapi.util.Key
-import org.jetbrains.kotlin.com.intellij.util.keyFMap.KeyFMap
+import org.jetbrains.kotlin.com.intellij.openapi.util.UserDataHolderBase
 import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.resolve.BindingContext
 
 class MetricProcessorTester(
     private val file: KtFile,
-    private val result: Detektion = MetricResults()
+    private val result: Detektion = MetricResults(),
 ) {
 
     fun <T : Any> test(processor: AbstractProcessor, key: Key<T>): T {
         with(processor) {
-            onStart(listOf(file), BindingContext.EMPTY)
-            onProcess(file, BindingContext.EMPTY)
-            onProcessComplete(file, emptyMap(), BindingContext.EMPTY)
-            onFinish(listOf(file), result, BindingContext.EMPTY)
+            onStart(listOf(file))
+            onProcess(file)
+            onProcessComplete(file, emptyList())
+            onFinish(listOf(file), result)
         }
-        return checkNotNull(result.getData(key))
+        return checkNotNull(result.getUserData(key))
     }
 }
 
-private class MetricResults : Detektion {
-    override val findings: Map<RuleSetId, List<Finding>>
+private class MetricResults : Detektion, UserDataHolderBase() {
+    override val issues: List<Issue>
+        get() = throw UnsupportedOperationException()
+    override val rules: List<RuleInstance>
         get() = throw UnsupportedOperationException()
     override val notifications: Collection<Notification>
         get() = throw UnsupportedOperationException()
     override val metrics: MutableList<ProjectMetric> = mutableListOf()
 
-    private var data = KeyFMap.EMPTY_MAP
-
-    override fun <V> getData(key: Key<V>): V? = data[key]
-
-    override fun <V> addData(key: Key<V>, value: V) {
-        data = data.plus(key, requireNotNull(value))
-    }
-
-    override fun add(notification: Notification) {
-        throw UnsupportedOperationException()
-    }
+    override fun add(notification: Notification): Unit = throw UnsupportedOperationException()
 
     override fun add(projectMetric: ProjectMetric) {
         metrics.add(projectMetric)

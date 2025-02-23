@@ -1,27 +1,25 @@
 package io.gitlab.arturbosch.detekt.rules.complexity
 
 import io.gitlab.arturbosch.detekt.test.TestConfig
-import io.gitlab.arturbosch.detekt.test.compileAndLint
+import io.gitlab.arturbosch.detekt.test.lint
 import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 
-private const val THRESHOLD = 4
-private val defaultConfigMap = mapOf("threshold" to THRESHOLD)
-private val staticDeclarationsConfig = TestConfig(
-    defaultConfigMap + ("includeStaticDeclarations" to true)
-)
-private val privateDeclarationsConfig = TestConfig(
-    defaultConfigMap + ("includePrivateDeclarations" to true)
-)
+private val defaultAllowedDefinitions = "allowedDefinitions" to 3
+private val staticDeclarationsConfig = TestConfig(defaultAllowedDefinitions, "includeStaticDeclarations" to true)
+private val privateDeclarationsConfig = TestConfig(defaultAllowedDefinitions, "includePrivateDeclarations" to true)
+private val ignoreOverloadedConfig = TestConfig(defaultAllowedDefinitions, "ignoreOverloaded" to true)
 
-class ComplexInterfaceSpec : Spek({
+class ComplexInterfaceSpec {
 
-    val subject by memoized { ComplexInterface(TestConfig(defaultConfigMap)) }
+    private val subject = ComplexInterface(TestConfig(defaultAllowedDefinitions))
 
-    describe("ComplexInterface rule positives") {
+    @Nested
+    inner class `ComplexInterface rule positives` {
 
-        context("interface members") {
+        @Nested
+        inner class `interface members` {
             val code = """
                 interface I {
                     fun f1()
@@ -29,19 +27,22 @@ class ComplexInterfaceSpec : Spek({
                     val i1: Int
                     fun fImpl() {}
                 }
-            """
+            """.trimIndent()
 
-            it("reports complex interface") {
-                assertThat(subject.compileAndLint(code)).hasSize(1)
+            @Test
+            fun `reports complex interface`() {
+                assertThat(subject.lint(code)).hasSize(1)
             }
 
-            it("reports complex interface with includeStaticDeclarations config") {
+            @Test
+            fun `reports complex interface with includeStaticDeclarations config`() {
                 val rule = ComplexInterface(staticDeclarationsConfig)
-                assertThat(rule.compileAndLint(code)).hasSize(1)
+                assertThat(rule.lint(code)).hasSize(1)
             }
         }
 
-        context("nested interface members") {
+        @Nested
+        inner class `nested interface members` {
             val code = """
                 class I {
                     interface Nested {
@@ -51,19 +52,22 @@ class ComplexInterfaceSpec : Spek({
                         fun fImpl() {}
                     }
                 }
-            """
+            """.trimIndent()
 
-            it("reports complex interface") {
-                assertThat(subject.compileAndLint(code)).hasSize(1)
+            @Test
+            fun `reports complex interface`() {
+                assertThat(subject.lint(code)).hasSize(1)
             }
 
-            it("reports complex interface with includeStaticDeclarations config") {
+            @Test
+            fun `reports complex interface with includeStaticDeclarations config`() {
                 val rule = ComplexInterface(staticDeclarationsConfig)
-                assertThat(rule.compileAndLint(code)).hasSize(1)
+                assertThat(rule.lint(code)).hasSize(1)
             }
         }
 
-        context("interface with static declarations") {
+        @Nested
+        inner class `interface with static declarations` {
             val code = """
                 interface I {
                     fun f1()
@@ -73,19 +77,22 @@ class ComplexInterfaceSpec : Spek({
                         val v = 0
                     }
                 }
-            """
+            """.trimIndent()
 
-            it("does not report static declarations per default") {
-                assertThat(subject.compileAndLint(code)).isEmpty()
+            @Test
+            fun `does not report static declarations per default`() {
+                assertThat(subject.lint(code)).isEmpty()
             }
 
-            it("reports complex interface with includeStaticDeclarations config") {
+            @Test
+            fun `reports complex interface with includeStaticDeclarations config`() {
                 val rule = ComplexInterface(staticDeclarationsConfig)
-                assertThat(rule.compileAndLint(code)).hasSize(1)
+                assertThat(rule.lint(code)).hasSize(1)
             }
         }
 
-        context("private functions") {
+        @Nested
+        inner class `private functions` {
             val code = """
                 interface I {
                     fun f1()
@@ -93,19 +100,22 @@ class ComplexInterfaceSpec : Spek({
                     val i1: Int
                     private fun fImpl() {}
                 }
-            """
+            """.trimIndent()
 
-            it("does not report complex interface") {
-                assertThat(subject.compileAndLint(code)).isEmpty()
+            @Test
+            fun `does not report complex interface`() {
+                assertThat(subject.lint(code)).isEmpty()
             }
 
-            it("does report complex interface with includePrivateDeclarations config") {
+            @Test
+            fun `does report complex interface with includePrivateDeclarations config`() {
                 val rule = ComplexInterface(privateDeclarationsConfig)
-                assertThat(rule.compileAndLint(code)).hasSize(1)
+                assertThat(rule.lint(code)).hasSize(1)
             }
         }
 
-        context("private members") {
+        @Nested
+        inner class `private members` {
             val code = """
                 interface I {
                     fun f1()
@@ -114,53 +124,122 @@ class ComplexInterfaceSpec : Spek({
                         get() = 42
                     fun fImpl() {}
                 }
-            """
+            """.trimIndent()
 
-            it("does not report complex interface") {
-                assertThat(subject.compileAndLint(code)).isEmpty()
+            @Test
+            fun `does not report complex interface`() {
+                assertThat(subject.lint(code)).isEmpty()
             }
 
-            it("does report complex interface with includePrivateDeclarations config") {
+            @Test
+            fun `does report complex interface with includePrivateDeclarations config`() {
                 val rule = ComplexInterface(privateDeclarationsConfig)
-                assertThat(rule.compileAndLint(code)).hasSize(1)
+                assertThat(rule.lint(code)).hasSize(1)
+            }
+        }
+
+        @Nested
+        inner class `overloaded methods` {
+            val code = """
+                interface I {
+                    fun f1()
+                    fun f1(i: Int)
+                    val i1: Int
+                    fun fImpl() {}
+                }
+            """.trimIndent()
+
+            @Test
+            fun `reports complex interface with overloaded methods`() {
+                assertThat(subject.lint(code)).hasSize(1)
+            }
+
+            @Test
+            fun `does not report simple interface with ignoreOverloaded`() {
+                val rule = ComplexInterface(ignoreOverloadedConfig)
+                assertThat(rule.lint(code)).isEmpty()
+            }
+
+            @Test
+            fun `reports complex interface with extension methods with a different receiver`() {
+                val interfaceWithExtension = """
+                    interface I {
+                        fun f1()
+                        fun String.f1(i: Int)
+                        val i1: Int
+                        fun fImpl() {}
+                    }
+                """.trimIndent()
+                val rule = ComplexInterface(ignoreOverloadedConfig)
+                assertThat(rule.lint(interfaceWithExtension)).hasSize(1)
+            }
+
+            @Test
+            fun `does not report simple interface with extension methods with the same receiver`() {
+                val interfaceWithOverloadedExtensions = """
+                    interface I {
+                        fun String.f1()
+                        fun String.f1(i: Int)
+                        val i1: Int
+                        fun fImpl() {}
+                    }
+                """.trimIndent()
+                val rule = ComplexInterface(ignoreOverloadedConfig)
+                assertThat(rule.lint(interfaceWithOverloadedExtensions)).isEmpty()
             }
         }
     }
 
-    describe("ComplexInterface rule negatives") {
+    @Nested
+    inner class `ComplexInterface rule negatives` {
 
-        it("does not report a simple interface ") {
+        @Test
+        fun `does not report a simple interface `() {
             val code = """
                 interface I {
                     fun f()
                     fun fImpl() {
                         val x = 0 // should not report
                     }
-
+                
                     val i: Int
                     // a comment shouldn't be detected
                 }
-            """
-            assertThat(subject.compileAndLint(code)).isEmpty()
+            """.trimIndent()
+            assertThat(subject.lint(code)).isEmpty()
         }
 
-        it("does not report a simple interface with a companion object") {
+        @Test
+        fun `does not report a simple interface with a companion object`() {
             val code = """
                 interface I {
                     fun f()
-
+                
                     companion object {
                         fun sf() = 0
                         const val c = 0
                     }
                 }
-            """
-            assertThat(subject.compileAndLint(code)).isEmpty()
+            """.trimIndent()
+            assertThat(subject.lint(code)).isEmpty()
         }
 
-        it("does not report an empty interface") {
+        @Test
+        fun `does not report an empty interface`() {
             val code = "interface Empty"
-            assertThat(subject.compileAndLint(code)).isEmpty()
+            assertThat(subject.lint(code)).isEmpty()
+        }
+
+        @Test
+        fun `does not report an interface that has exactly the allowed definitions`() {
+            val code = """
+                interface MyInterface{
+                    fun func1()
+                    fun func2()
+                    fun func3()
+                }
+            """.trimIndent()
+            assertThat(subject.lint(code)).isEmpty()
         }
     }
-})
+}

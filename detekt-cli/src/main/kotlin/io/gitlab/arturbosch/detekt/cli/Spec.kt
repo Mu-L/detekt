@@ -2,8 +2,18 @@ package io.gitlab.arturbosch.detekt.cli
 
 import io.github.detekt.tooling.api.spec.ProcessingSpec
 import io.github.detekt.tooling.api.spec.RulesSpec
-import io.gitlab.arturbosch.detekt.api.commaSeparatedPattern
+import io.github.detekt.tooling.api.spec.RulesSpec.RunPolicy.DisableDefaultRuleSets
+import io.github.detekt.tooling.api.spec.RulesSpec.RunPolicy.NoRestrictions
+import io.github.detekt.utils.PathFilters
+import io.gitlab.arturbosch.detekt.api.RuleSet
+import java.nio.file.Path
+import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.absolute
+import kotlin.io.path.extension
+import kotlin.io.path.relativeTo
+import kotlin.io.path.walk
 
+@Suppress("LongMethod")
 internal fun CliArgs.createSpec(output: Appendable, error: Appendable): ProcessingSpec {
     val args = this
     return ProcessingSpec {
@@ -14,23 +24,25 @@ internal fun CliArgs.createSpec(output: Appendable, error: Appendable): Processi
         }
 
         project {
-            basePath = args.basePath
-            inputPaths = args.inputPaths
-            excludes = asPatterns(args.excludes)
-            includes = asPatterns(args.includes)
+            basePath = args.basePath.absolute()
+            val pathFilters = PathFilters.of(
+                includes = args.includes?.let(::asPatterns).orEmpty(),
+                excludes = args.excludes?.let(::asPatterns).orEmpty(),
+            )
+            val absoluteBasePath = basePath.absolute()
+            inputPaths = args.inputPaths.walk()
+                .filter { path -> path.isKotlinFile() }
+                .map { path -> path.absolute().relativeTo(absoluteBasePath) }
+                .filter { path -> pathFilters?.isIgnored(path) != true }
+                .map { path -> absoluteBasePath.resolve(path).normalize() }
+                .toSet()
+            analysisMode = args.analysisMode
         }
 
         rules {
             autoCorrect = args.autoCorrect
-            @Suppress("DEPRECATION")
-            activateAllRules = args.failFast || args.allRules
-            maxIssuePolicy = when (val count = args.maxIssues) {
-                null -> RulesSpec.MaxIssuePolicy.NonSpecified // prefer to read from config
-                0 -> RulesSpec.MaxIssuePolicy.NoneAllowed
-                in -1 downTo Int.MIN_VALUE -> RulesSpec.MaxIssuePolicy.AllowAny
-                else -> RulesSpec.MaxIssuePolicy.AllowAmount(count)
-            }
-            excludeCorrectable = false // not yet supported; loaded from config
+            activateAllRules = args.allRules
+            failurePolicy = args.failurePolicy
             runPolicy = args.toRunPolicy()
         }
 
@@ -41,11 +53,9 @@ internal fun CliArgs.createSpec(output: Appendable, error: Appendable): Processi
 
         config {
             useDefaultConfig = args.buildUponDefaultConfig
-            shouldValidateBeforeAnalysis = false
-            knownPatterns = emptyList()
-            // ^^ cli does not have these properties yet; specified in yaml config for now
-            configPaths = config?.let { MultipleExistingPathConverter().convert(it) }.orEmpty()
-            resources = configResource?.let { MultipleClasspathResourceConverter().convert(it) }.orEmpty()
+            shouldValidateBeforeAnalysis = null
+            configPaths = args.config
+            resources = args.configResource
         }
 
         execution {
@@ -55,7 +65,7 @@ internal fun CliArgs.createSpec(output: Appendable, error: Appendable): Processi
 
         extensions {
             disableDefaultRuleSets = args.disableDefaultRuleSets
-            fromPaths { args.plugins?.let { MultipleExistingPathConverter().convert(it) }.orEmpty() }
+            fromPaths { args.plugins }
         }
 
         reports {
@@ -65,21 +75,32 @@ internal fun CliArgs.createSpec(output: Appendable, error: Appendable): Processi
         }
 
         compiler {
-            jvmTarget = args.jvmTarget
+            jvmTarget = args.jvmTarget.toString()
             languageVersion = args.languageVersion?.versionString
+            apiVersion = args.apiVersion?.versionString
             classpath = args.classpath?.trim()
+            jdkHome = args.jdkHome
+            freeCompilerArgs = args.freeCompilerArgs
         }
     }
 }
 
-private fun asPatterns(rawValue: String?): List<String> =
-    rawValue?.trim()
-        ?.commaSeparatedPattern(",", ";")
-        ?.toList()
-        .orEmpty()
+@OptIn(ExperimentalPathApi::class)
+private fun Iterable<Path>.walk(): Sequence<Path> = asSequence().flatMap { it.walk() }
+
+private fun Path.isKotlinFile() = extension in KT_ENDINGS
+
+private val KT_ENDINGS = setOf("kt", "kts")
+
+private fun asPatterns(rawValue: String): List<String> = rawValue.trim()
+    .splitToSequence(",", ";")
+    .filter { it.isNotBlank() }
+    .map { it.trim() }
+    .toList()
 
 private fun CliArgs.toRunPolicy(): RulesSpec.RunPolicy {
-    val parts = runRule?.split(":") ?: return RulesSpec.RunPolicy.NoRestrictions
-    require(parts.size == 2) { "Pattern 'RuleSetId:RuleId' expected." }
-    return RulesSpec.RunPolicy.RestrictToSingleRule(parts[0] to parts[1])
+    val parts = runRule?.split(":")
+        ?: return if (disableDefaultRuleSets) DisableDefaultRuleSets else NoRestrictions
+    require(parts.size == 2) { "Pattern 'RuleSetId:RuleName' expected." }
+    return RulesSpec.RunPolicy.RestrictToSingleRule(RuleSet.Id(parts[0]), parts[1])
 }

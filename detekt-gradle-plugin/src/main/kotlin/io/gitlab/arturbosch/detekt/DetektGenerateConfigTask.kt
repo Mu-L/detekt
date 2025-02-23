@@ -1,28 +1,28 @@
 package io.gitlab.arturbosch.detekt
 
-import io.gitlab.arturbosch.detekt.DetektPlugin.Companion.CONFIG_DIR_NAME
-import io.gitlab.arturbosch.detekt.DetektPlugin.Companion.CONFIG_FILE
-import io.gitlab.arturbosch.detekt.invoke.ConfigArgument
+import io.gitlab.arturbosch.detekt.invoke.CliArgument
 import io.gitlab.arturbosch.detekt.invoke.DetektInvoker
+import io.gitlab.arturbosch.detekt.invoke.DetektWorkAction
 import io.gitlab.arturbosch.detekt.invoke.GenerateConfigArgument
-import io.gitlab.arturbosch.detekt.invoke.isDryRunEnabled
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.model.ObjectFactory
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ProviderFactory
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
-import org.gradle.api.tasks.InputFiles
-import org.gradle.api.tasks.Optional
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.gradle.language.base.plugins.LifecycleBasePlugin
-import java.nio.file.Files
+import org.gradle.workers.WorkerExecutor
 import javax.inject.Inject
 
 @CacheableTask
-open class DetektGenerateConfigTask @Inject constructor(
-    private val objects: ObjectFactory
+abstract class DetektGenerateConfigTask @Inject constructor(
+    private val workerExecutor: WorkerExecutor,
+    private val providers: ProviderFactory,
 ) : DefaultTask() {
 
     init {
@@ -31,41 +31,45 @@ open class DetektGenerateConfigTask @Inject constructor(
     }
 
     @get:Classpath
-    val detektClasspath: ConfigurableFileCollection = project.objects.fileCollection()
+    abstract val detektClasspath: ConfigurableFileCollection
 
-    @get:InputFiles
-    @get:Optional
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    val config: ConfigurableFileCollection = project.objects.fileCollection()
+    @get:Classpath
+    abstract val pluginClasspath: ConfigurableFileCollection
 
-    private val isDryRun: Boolean = project.isDryRunEnabled()
+    @get:OutputFile
+    abstract val configFile: RegularFileProperty
 
-    private val defaultConfigPath = project.rootDir.toPath().resolve(CONFIG_DIR_NAME).resolve(CONFIG_FILE)
+    @get:Internal
+    internal val arguments
+        get() = listOf(
+            GenerateConfigArgument(configFile.get())
+        ).flatMap(CliArgument::toArgument)
 
     @TaskAction
     fun generateConfig() {
-        val configurationToUse = if (config.isEmpty) {
-            objects.fileCollection().from(defaultConfigPath)
-        } else {
-            config
-        }
-
-        if (configurationToUse.last().exists()) {
-            logger.warn("Skipping config file generation; file already exists at ${configurationToUse.last()}")
+        if (configFile.get().asFile.exists()) {
+            logger.warn("Skipping config file generation; file already exists at ${configFile.get().asFile}")
             return
         }
 
-        Files.createDirectories(configurationToUse.last().parentFile.toPath())
+        if (providers.isWorkerApiEnabled()) {
+            logger.info("Executing $name using Worker API")
+            val workQueue = workerExecutor.processIsolation()
 
-        val arguments = mutableListOf(
-            GenerateConfigArgument,
-            ConfigArgument(configurationToUse.last())
-        )
-
-        DetektInvoker.create(task = this, isDryRun = isDryRun).invokeCli(
-            arguments = arguments.toList(),
-            classpath = detektClasspath,
-            taskName = name,
-        )
+            workQueue.submit(DetektWorkAction::class.java) { workParameters ->
+                workParameters.arguments.set(arguments)
+                workParameters.classpath.setFrom(detektClasspath, pluginClasspath)
+                workParameters.taskName.set(name)
+            }
+        } else {
+            logger.info("Executing $name using DetektInvoker")
+            DetektInvoker.create().invokeCli(
+                arguments = arguments,
+                classpath = detektClasspath.plus(pluginClasspath).files,
+                taskName = name,
+            )
+        }
     }
+
+    internal interface SingleExecutionBuildService : BuildService<BuildServiceParameters.None>
 }

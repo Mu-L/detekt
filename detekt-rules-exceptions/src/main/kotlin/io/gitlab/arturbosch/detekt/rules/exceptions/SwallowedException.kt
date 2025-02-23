@@ -1,15 +1,12 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import io.gitlab.arturbosch.detekt.rules.isAllowedExceptionName
 import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtCatchClause
@@ -69,14 +66,10 @@ import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
  * </compliant>
  */
 @ActiveByDefault(since = "1.16.0")
-class SwallowedException(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "SwallowedException",
-        Severity.CodeSmell,
-        "The caught exception is swallowed. The original exception could be lost.",
-        Debt.TWENTY_MINS
-    )
+class SwallowedException(config: Config) : Rule(
+    config,
+    "The caught exception is swallowed. The original exception could be lost."
+) {
 
     @Configuration("exception types which should be ignored (both in the catch clause and body)")
     private val ignoredExceptionTypes: List<String> by config(EXCEPTIONS_IGNORED_BY_DEFAULT) { exceptions ->
@@ -93,7 +86,7 @@ class SwallowedException(config: Config = Config.empty) : Rule(config) {
                 isExceptionSwallowedOrUnused(catchClause) &&
                 !catchClause.isAllowedExceptionName(allowedExceptionNameRegex)
             ) {
-                report(CodeSmell(issue, Entity.from(catchParameter), issue.description))
+                report(Finding(Entity.from(catchParameter), description))
             }
         }
         super.visitCatchSection(catchClause)
@@ -112,16 +105,16 @@ class SwallowedException(config: Config = Config.empty) : Rule(config) {
 
     private fun isExceptionSwallowed(catchClause: KtCatchClause): Boolean {
         val parameterName = catchClause.catchParameter?.name
-        val catchBody = catchClause.catchBody
-        return catchBody?.anyDescendantOfType<KtThrowExpression> { throwExpr ->
-            val parameterReferences = throwExpr.parameterReferences(parameterName, catchBody)
-            parameterReferences.isNotEmpty() && parameterReferences.all { it is KtDotQualifiedExpression }
-        } == true
+        val catchBody = catchClause.catchBody ?: return false
+        return catchBody.anyDescendantOfType<KtThrowExpression> { throwExpr ->
+            val refs = throwExpr.parameterReferences(parameterName, catchBody)
+            refs.isNotEmpty() && refs.all { it is KtDotQualifiedExpression && it.parent !is KtThrowExpression }
+        }
     }
 
     private fun KtThrowExpression.parameterReferences(
         parameterName: String?,
-        catchBody: KtExpression
+        catchBody: KtExpression,
     ): List<KtExpression> {
         val parameterReferencesInVariables = mutableMapOf<String, KtExpression>()
         return thrownExpression
@@ -143,7 +136,7 @@ class SwallowedException(config: Config = Config.empty) : Rule(config) {
     private fun KtExpression.findReferenceInVariable(
         referenceName: String?,
         variableName: String,
-        catchBody: KtExpression
+        catchBody: KtExpression,
     ): KtExpression? {
         val block = getStrictParentOfType<KtBlockExpression>() ?: return null
         fun find(block: KtBlockExpression): KtExpression? {
@@ -167,7 +160,8 @@ class SwallowedException(config: Config = Config.empty) : Rule(config) {
     }
 
     companion object {
-        internal val EXCEPTIONS_IGNORED_BY_DEFAULT = listOf(
+        @JvmStatic
+        val EXCEPTIONS_IGNORED_BY_DEFAULT = listOf(
             "InterruptedException",
             "MalformedURLException",
             "NumberFormatException",

@@ -1,27 +1,21 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.SplitPattern
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
-import io.gitlab.arturbosch.detekt.rules.parentsOfTypeUntil
-import io.gitlab.arturbosch.detekt.rules.yieldStatementsSkippingGuardClauses
-import org.jetbrains.kotlin.psi.KtCallExpression
-import org.jetbrains.kotlin.psi.KtNameReferenceExpression
+import io.gitlab.arturbosch.detekt.api.simplePatternToRegex
+import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtReturnExpression
 import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
 
 /**
- * Restrict the number of return methods allowed in methods.
+ * Restrict the number of returns allowed in methods.
  *
  * Having many exit points in a function can be confusing and impacts readability of the
  * code.
@@ -47,20 +41,16 @@ import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
  * </compliant>
  */
 @ActiveByDefault(since = "1.0.0")
-class ReturnCount(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Restrict the number of return statements in methods.",
-        Debt.TEN_MINS
-    )
+class ReturnCount(config: Config) : Rule(
+    config,
+    "Restrict the number of return statements in methods."
+) {
 
     @Configuration("define the maximum number of return statements allowed per function")
     private val max: Int by config(2)
 
-    @Configuration("define functions to be ignored by this check")
-    private val excludedFunctions: SplitPattern by config("equals") { SplitPattern(it) }
+    @Configuration("define a list of function names to be ignored by this check")
+    private val excludedFunctions: List<Regex> by config(listOf("equals")) { it.map(String::simplePatternToRegex) }
 
     @Configuration("if labeled return statements should be ignored")
     private val excludeLabeled: Boolean by config(false)
@@ -79,8 +69,7 @@ class ReturnCount(config: Config = Config.empty) : Rule(config) {
 
             if (numberOfReturns > max) {
                 report(
-                    CodeSmell(
-                        issue,
+                    Finding(
                         Entity.atName(function),
                         "Function ${function.name} has $numberOfReturns return statements " +
                             "which exceeds the limit of $max."
@@ -90,14 +79,12 @@ class ReturnCount(config: Config = Config.empty) : Rule(config) {
         }
     }
 
-    private fun shouldBeIgnored(function: KtNamedFunction) = excludedFunctions.contains(function.name)
+    private fun shouldBeIgnored(function: KtNamedFunction) = function.name in excludedFunctions
 
     private fun countReturnStatements(function: KtNamedFunction): Int {
-        fun KtReturnExpression.isExcluded(): Boolean = when {
-            excludeLabeled && labeledExpression != null -> true
-            excludeReturnFromLambda && isNamedReturnFromLambda() -> true
-            else -> false
-        }
+        fun KtReturnExpression.isExcluded(): Boolean =
+            (excludeReturnFromLambda && isNamedReturnFromLambda()) ||
+                (excludeLabeled && labeledExpression != null)
 
         val statements = if (excludeGuardClauses) {
             function.yieldStatementsSkippingGuardClauses<KtReturnExpression>()
@@ -113,12 +100,10 @@ class ReturnCount(config: Config = Config.empty) : Rule(config) {
     private fun KtReturnExpression.isNamedReturnFromLambda(): Boolean {
         val label = this.labeledExpression
         if (label != null) {
-            return this.parentsOfTypeUntil<KtCallExpression, KtNamedFunction>()
-                .map { it.calleeExpression }
-                .filterIsInstance<KtNameReferenceExpression>()
-                .map { it.text }
-                .any { it in label.text }
+            return this.getParentOfType<KtLambdaExpression>(true, KtNamedFunction::class.java) != null
         }
         return false
     }
 }
+
+private operator fun Iterable<Regex>.contains(input: String?): Boolean = input != null && any { it.matches(input) }

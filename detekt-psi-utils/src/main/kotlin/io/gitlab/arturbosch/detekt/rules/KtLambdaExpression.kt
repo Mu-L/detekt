@@ -6,7 +6,7 @@ import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.psiUtil.anyDescendantOfType
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
 
 fun KtLambdaExpression.firstParameter(bindingContext: BindingContext) =
     bindingContext[BindingContext.FUNCTION, functionLiteral]?.valueParameters?.singleOrNull()
@@ -20,19 +20,17 @@ fun KtLambdaExpression.implicitParameter(bindingContext: BindingContext): ValueP
 
 fun KtLambdaExpression.hasImplicitParameterReference(
     implicitParameter: ValueParameterDescriptor,
-    bindingContext: BindingContext
-): Boolean {
-    return anyDescendantOfType<KtNameReferenceExpression> {
+    bindingContext: BindingContext,
+): Boolean =
+    anyDescendantOfType<KtNameReferenceExpression> {
         it.isImplicitParameterReference(this, implicitParameter, bindingContext)
     }
-}
 
 private fun KtNameReferenceExpression.isImplicitParameterReference(
     lambda: KtLambdaExpression,
     implicitParameter: ValueParameterDescriptor,
-    bindingContext: BindingContext
-): Boolean {
-    return text == "it" &&
+    bindingContext: BindingContext,
+): Boolean =
+    text == "it" &&
         getStrictParentOfType<KtLambdaExpression>() == lambda &&
         getResolvedCall(bindingContext)?.resultingDescriptor == implicitParameter
-}

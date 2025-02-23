@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import org.jetbrains.kotlin.psi.KtFinallySection
 import org.jetbrains.kotlin.psi.KtThrowExpression
 import org.jetbrains.kotlin.psi.psiUtil.forEachDescendantOfType
@@ -27,18 +24,14 @@ import org.jetbrains.kotlin.psi.psiUtil.forEachDescendantOfType
  * </noncompliant>
  */
 @ActiveByDefault(since = "1.16.0")
-class ThrowingExceptionFromFinally(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "ThrowingExceptionFromFinally",
-        Severity.Defect,
-        "Do not throw an exception within a finally statement. This can discard exceptions and is confusing.",
-        Debt.TWENTY_MINS
-    )
+class ThrowingExceptionFromFinally(config: Config) : Rule(
+    config,
+    "Do not throw an exception within a finally statement. This can discard exceptions and is confusing."
+) {
 
     override fun visitFinallySection(finallySection: KtFinallySection) {
         finallySection.finalExpression.forEachDescendantOfType<KtThrowExpression> {
-            report(CodeSmell(issue, Entity.from(it), issue.description))
+            report(Finding(Entity.from(it), description))
         }
     }
 }

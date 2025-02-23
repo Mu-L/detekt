@@ -1,14 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.performance
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.builtins.PrimitiveType
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
@@ -18,12 +15,11 @@ import org.jetbrains.kotlin.psi.KtCallableDeclaration
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
-import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
 
 /**
- * Using Array<Primitive> leads to implicit boxing and performance hit. Prefer using Kotlin specialized Array
+ * Using `Array<Primitive>` leads to implicit boxing and performance hit. Prefer using Kotlin specialized Array
  * Instances.
  *
  * As stated in the Kotlin [documentation](https://kotlinlang.org/docs/basic-types.html#arrays) Kotlin has
@@ -41,39 +37,35 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
  * fun returningFunction(): DoubleArray { }
  * </compliant>
  */
-@RequiresTypeResolution
 @ActiveByDefault(since = "1.2.0")
-class ArrayPrimitive(config: Config = Config.empty) : Rule(config) {
-    override val issue = Issue(
-        "ArrayPrimitive",
-        Severity.Performance,
-        "Using Array<Primitive> leads to implicit boxing and a performance hit",
-        Debt.FIVE_MINS
-    )
+class ArrayPrimitive(config: Config) :
+    Rule(
+        config,
+        "Using `Array<Primitive>` leads to implicit boxing and a performance hit."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitCallExpression(expression: KtCallExpression) {
         super.visitCallExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
         if (expression.calleeExpression?.text !in factoryMethodNames) return
 
         val descriptor = expression.getResolvedCall(bindingContext)?.resultingDescriptor
         if (descriptor != null && isArrayPrimitive(descriptor)) {
-            report(CodeSmell(issue, Entity.from(expression), issue.description))
+            report(Finding(Entity.from(expression), description))
         }
     }
 
     override fun visitNamedDeclaration(declaration: KtNamedDeclaration) {
         super.visitNamedDeclaration(declaration)
         if (declaration is KtCallableDeclaration) {
-            reportArrayPrimitives(declaration.typeReference)
-            reportArrayPrimitives(declaration.receiverTypeReference)
+            declaration.typeReference?.let(this::reportArrayPrimitives)
+            declaration.receiverTypeReference?.let(this::reportArrayPrimitives)
         }
     }
 
-    private fun reportArrayPrimitives(typeReference: KtTypeReference?) {
-        typeReference
-            ?.collectDescendantsOfType<KtTypeReference> { isArrayPrimitive(it) }
-            ?.forEach { report(CodeSmell(issue, Entity.from(it), issue.description)) }
+    private fun reportArrayPrimitives(typeReference: KtTypeReference) {
+        typeReference.collectDescendantsOfType<KtTypeReference> { isArrayPrimitive(it) }
+            .forEach { report(Finding(Entity.from(it), description)) }
     }
 
     private fun isArrayPrimitive(descriptor: CallableDescriptor): Boolean {
@@ -90,7 +82,7 @@ class ArrayPrimitive(config: Config = Config.empty) : Rule(config) {
     }
 
     companion object {
-        private val primitiveTypes = PrimitiveType.values().map { it.typeName.asString() }
+        private val primitiveTypes = PrimitiveType.entries.map { it.typeName.asString() }
         private val factoryMethodFqNames = listOf(FqName("kotlin.arrayOf"), FqName("kotlin.emptyArray"))
         private val factoryMethodNames = factoryMethodFqNames.map { it.shortName().asString() }
     }

@@ -1,58 +1,27 @@
 package io.gitlab.arturbosch.detekt.api
 
-import io.github.detekt.psi.FilePath
-import io.github.detekt.psi.toFilePath
+import dev.drewhamilton.poko.Poko
 import org.jetbrains.kotlin.com.intellij.openapi.util.TextRange
 import org.jetbrains.kotlin.com.intellij.psi.PsiElement
-import org.jetbrains.kotlin.diagnostics.DiagnosticUtils
+import org.jetbrains.kotlin.diagnostics.DiagnosticUtils.getLineAndColumnInPsiFile
 import org.jetbrains.kotlin.diagnostics.PsiDiagnosticUtils
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.psiUtil.endOffset
 import org.jetbrains.kotlin.psi.psiUtil.startOffset
-import java.nio.file.Paths
+import java.nio.file.Path
+import kotlin.io.path.Path
 
 /**
  * Specifies a position within a source code fragment.
  */
-data class Location @Deprecated("Consider relative path by passing a [FilePath]") @JvmOverloads constructor(
+class Location(
     val source: SourceLocation,
+    val endSource: SourceLocation,
     val text: TextLocation,
-    @Deprecated(
-        "Use filePath instead",
-        ReplaceWith(
-            "filePath.absolutePath.toString()"
-        )
-    )
-    val file: String,
-    val filePath: FilePath = FilePath.fromAbsolute(Paths.get(file))
-) : Compactable {
-
-    @Suppress("DEPRECATION")
-    constructor(
-        source: SourceLocation,
-        text: TextLocation,
-        filePath: FilePath
-    ) : this(source, text, filePath.absolutePath.toString(), filePath)
-
-    @Suppress("DEPRECATION")
-    @Deprecated(
-        """
-        locationString was removed and won't get passed to the main constructor.
-        Use queries on 'ktElement' instead.
-        """,
-        ReplaceWith(
-            "Location(source, text, file)",
-            "io.gitlab.arturbosch.detekt.api.Location"
-        )
-    )
-    constructor(
-        source: SourceLocation,
-        text: TextLocation,
-        @Suppress("UNUSED_PARAMETER") locationString: String,
-        file: String
-    ) : this(source, text, file)
-
-    override fun compact(): String = "${filePath.absolutePath}:$source"
+    val path: Path,
+) {
+    override fun toString(): String =
+        "Location(source=$source, endSource=$endSource, text=$text, path=$path)"
 
     companion object {
         /**
@@ -62,38 +31,63 @@ data class Location @Deprecated("Consider relative path by passing a [FilePath]"
         fun from(element: PsiElement, offset: Int = 0): Location {
             val start = startLineAndColumn(element, offset)
             val sourceLocation = SourceLocation(start.line, start.column)
+            val end = endLineAndColumn(element, offset)
+            val endSourceLocation = SourceLocation(end.line, end.column)
             val textLocation = TextLocation(element.startOffset + offset, element.endOffset + offset)
-            return Location(sourceLocation, textLocation, element.containingFile.toFilePath())
+            return Location(
+                sourceLocation,
+                endSourceLocation,
+                textLocation,
+                Path((element.containingFile as KtFile).virtualFilePath)
+            )
         }
 
         /**
-         * Determines the line and column of a [PsiElement] in the source file.
+         * Determines the start line and column of a [PsiElement] in the source file.
          */
-        fun startLineAndColumn(element: PsiElement, offset: Int = 0): PsiDiagnosticUtils.LineAndColumn {
-            return try {
-                val range = element.textRange
-                DiagnosticUtils.getLineAndColumnInPsiFile(
-                    element.containingFile,
-                    TextRange(range.startOffset + offset, range.endOffset + offset)
-                )
-            } catch (@Suppress("SwallowedException", "TooGenericExceptionCaught") e: IndexOutOfBoundsException) {
-                // #3317 If any rule mutates the PsiElement, searching the original PsiElement may throw exception.
-                PsiDiagnosticUtils.LineAndColumn(-1, -1, null)
+        private fun startLineAndColumn(element: PsiElement, offset: Int = 0): PsiDiagnosticUtils.LineAndColumn =
+            lineAndColumn(
+                element,
+                TextRange(element.textRange.startOffset + offset, element.textRange.endOffset + offset)
+            )
+
+        /**
+         * Determines the end line and column of a [PsiElement] in the source file.
+         */
+        private fun endLineAndColumn(element: PsiElement, offset: Int = 0): PsiDiagnosticUtils.LineAndColumn =
+            lineAndColumn(
+                element,
+                TextRange(element.textRange.endOffset + offset, element.textRange.endOffset + offset)
+            )
+
+        private fun lineAndColumn(element: PsiElement, range: TextRange): PsiDiagnosticUtils.LineAndColumn =
+            if (element.containingFile.text.isNotEmpty()) {
+                getLineAndColumnInPsiFile(element.containingFile, range)
+            } else {
+                PsiDiagnosticUtils.LineAndColumn(1, 1, null)
             }
-        }
     }
 }
 
 /**
  * Stores line and column information of a location.
  */
-data class SourceLocation(val line: Int, val column: Int) {
+@Poko
+class SourceLocation(val line: Int, val column: Int) : Comparable<SourceLocation> {
+    init {
+        require(line > 0) { "The source location line must be greater than 0" }
+        require(column > 0) { "The source location column must be greater than 0" }
+    }
+
     override fun toString(): String = "$line:$column"
+
+    override fun compareTo(other: SourceLocation): Int = compareValuesBy(this, other, { it.line }, { it.column })
 }
 
 /**
  * Stores character start and end positions of a text file.
  */
-data class TextLocation(val start: Int, val end: Int) {
+@Poko
+class TextLocation(val start: Int, val end: Int) {
     override fun toString(): String = "$start:$end"
 }

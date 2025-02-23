@@ -1,15 +1,12 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import io.gitlab.arturbosch.detekt.rules.isAllowedExceptionName
 import org.jetbrains.kotlin.psi.KtCatchClause
 import org.jetbrains.kotlin.psi.KtTypeReference
@@ -36,15 +33,11 @@ import org.jetbrains.kotlin.psi.KtTypeReference
  * </compliant>
  */
 @ActiveByDefault(since = "1.0.0")
-class TooGenericExceptionCaught(config: Config) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Defect,
-        "Caught exception is too generic. " +
-            "Prefer catching specific exceptions to the case that is currently handled.",
-        Debt.TWENTY_MINS
-    )
+class TooGenericExceptionCaught(config: Config) : Rule(
+    config,
+    "The caught exception is too generic. " +
+        "Prefer catching specific exceptions to the case that is currently handled."
+) {
 
     @Configuration("exceptions which are too generic and should not be caught")
     private val exceptionNames: Set<String> by config(caughtExceptionDefaults) { it.toSet() }
@@ -57,15 +50,13 @@ class TooGenericExceptionCaught(config: Config) : Rule(config) {
             if (isTooGenericException(catchParameter.typeReference) &&
                 !catchClause.isAllowedExceptionName(allowedExceptionNameRegex)
             ) {
-                report(CodeSmell(issue, Entity.from(catchParameter), issue.description))
+                report(Finding(Entity.from(catchParameter), description))
             }
         }
         super.visitCatchSection(catchClause)
     }
 
-    private fun isTooGenericException(typeReference: KtTypeReference?): Boolean {
-        return typeReference?.text in exceptionNames
-    }
+    private fun isTooGenericException(typeReference: KtTypeReference?): Boolean = typeReference?.text in exceptionNames
 
     companion object {
         val caughtExceptionDefaults = listOf(

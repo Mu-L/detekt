@@ -7,6 +7,9 @@ import kotlin.reflect.KClass
 fun KtAnnotated.isAnnotatedWith(annotation: KClass<out Annotation>): Boolean =
     annotationEntries.any { it.isOfType(annotation) }
 
+fun KtAnnotated.getAnnotation(annotation: KClass<out Annotation>): KtAnnotationEntry? =
+    annotationEntries.firstOrNull { it.isOfType(annotation) }
+
 fun KtAnnotated.firstAnnotationParameter(annotation: KClass<out Annotation>): String =
     checkNotNull(firstAnnotationParameterOrNull(annotation))
 
@@ -31,4 +34,4 @@ internal fun String.withoutQuotes() = removeSurrounding(TRIPLE_QUOTES)
 
 private const val SINGLE_QUOTES = "\""
 private const val TRIPLE_QUOTES = "\"\"\""
-private val STRING_CONCAT_REGEX = """["]\s*\+[\n\s]*["]""".toRegex()
+private val STRING_CONCAT_REGEX = """"\s*\+[\n\s]*"""".toRegex()

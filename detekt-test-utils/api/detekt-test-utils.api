@@ -1,5 +1,6 @@
 public final class io/github/detekt/test/utils/CompileExtensionsKt {
 	public static final fun compileContentForTest (Ljava/lang/String;Ljava/lang/String;)Lorg/jetbrains/kotlin/psi/KtFile;
+	public static final fun compileContentForTest (Ljava/lang/String;Ljava/nio/file/Path;)Lorg/jetbrains/kotlin/psi/KtFile;
 	public static synthetic fun compileContentForTest$default (Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lorg/jetbrains/kotlin/psi/KtFile;
 	public static final fun compileForTest (Ljava/nio/file/Path;)Lorg/jetbrains/kotlin/psi/KtFile;
 }
@@ -18,16 +19,11 @@ public final class io/github/detekt/test/utils/KotlinCoreEnvironmentWrapper {
 public final class io/github/detekt/test/utils/KotlinCoreEnvironmentWrapperKt {
 	public static final fun createEnvironment (Ljava/util/List;Ljava/util/List;)Lio/github/detekt/test/utils/KotlinCoreEnvironmentWrapper;
 	public static synthetic fun createEnvironment$default (Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lio/github/detekt/test/utils/KotlinCoreEnvironmentWrapper;
-	public static final fun createPsiFactory ()Lorg/jetbrains/kotlin/psi/KtPsiFactory;
 }
 
 public final class io/github/detekt/test/utils/KotlinScriptEngine {
 	public static final field INSTANCE Lio/github/detekt/test/utils/KotlinScriptEngine;
 	public final fun compile (Ljava/lang/String;)V
-}
-
-public final class io/github/detekt/test/utils/KotlinScriptException : java/lang/RuntimeException {
-	public fun <init> (Ljavax/script/ScriptException;)V
 }
 
 public final class io/github/detekt/test/utils/NullPrintStream : java/io/PrintStream {
@@ -46,8 +42,7 @@ public final class io/github/detekt/test/utils/StringPrintStream : java/io/Print
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/gitlab/arturbosch/detekt/rules/KotlinEnvironmentTestSetupKt {
-	public static final fun setupKotlinEnvironment (Lorg/spekframework/spek2/dsl/Root;Ljava/nio/file/Path;)V
-	public static synthetic fun setupKotlinEnvironment$default (Lorg/spekframework/spek2/dsl/Root;Ljava/nio/file/Path;ILjava/lang/Object;)V
+public abstract interface annotation class io/gitlab/arturbosch/detekt/rules/KotlinCoreEnvironmentTest : java/lang/annotation/Annotation {
+	public abstract fun additionalJavaSourcePaths ()[Ljava/lang/String;
 }
 

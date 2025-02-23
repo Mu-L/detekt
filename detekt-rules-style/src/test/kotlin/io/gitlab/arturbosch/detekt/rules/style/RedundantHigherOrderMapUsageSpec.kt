@@ -1,72 +1,77 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.rules.setupKotlinEnvironment
+import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.rules.KotlinCoreEnvironmentTest
 import io.gitlab.arturbosch.detekt.test.assertThat
-import io.gitlab.arturbosch.detekt.test.compileAndLintWithContext
+import io.gitlab.arturbosch.detekt.test.lintWithContext
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 
-class RedundantHigherOrderMapUsageSpec : Spek({
-    setupKotlinEnvironment()
-    val env: KotlinCoreEnvironment by memoized()
-    val subject by memoized { RedundantHigherOrderMapUsage() }
+@KotlinCoreEnvironmentTest
+class RedundantHigherOrderMapUsageSpec(val env: KotlinCoreEnvironment) {
+    val subject = RedundantHigherOrderMapUsage(Config.empty)
 
-    describe("report RedundantHigherOrderMapUsage rule") {
-        it("simple") {
+    @Nested
+    inner class `report RedundantHigherOrderMapUsage rule` {
+        @Test
+        fun simple() {
             val code = """
                 fun test() {
                     listOf(1, 2, 3)
                         .filter { it > 1 }
                         .map { it }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(4, 10)
-            assertThat(findings[0]).hasMessage("This 'map' call can be removed.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement().hasMessage("This 'map' call can be removed.")
+            assertThat(findings).hasStartSourceLocation(4, 10)
         }
 
-        it("lambda body is not single statement") {
+        @Test
+        fun `lambda body is not single statement`() {
             val code = """
                 fun doSomething() {}
-
+                
                 fun test() {
                     listOf(1, 2, 3)
                         .map {
                             doSomething()
-                            it 
+                            it
                         }
                         .filter { it > 1 }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(5, 10)
-            assertThat(findings[0]).hasMessage("This 'map' call can be replaced with 'onEach' or 'forEach'.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement()
+                .hasMessage("This 'map' call can be replaced with 'onEach' or 'forEach'.")
+            assertThat(findings).hasStartSourceLocation(5, 10)
         }
 
-        it("explicit lambda parameter") {
+        @Test
+        fun `explicit lambda parameter`() {
             val code = """
                 fun test() {
                     listOf(1, 2, 3).map { foo -> foo }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("lambda in argument list") {
+        @Test
+        fun `lambda in argument list`() {
             val code = """
                 fun test() {
                     listOf(1).map({ it })
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("labeled return") {
+        @Test
+        fun `labeled return`() {
             val code = """
                 fun test(list: List<Int>) {
                     list.map {
@@ -75,12 +80,13 @@ class RedundantHigherOrderMapUsageSpec : Spek({
                         it
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("return for outer function") {
+        @Test
+        fun `return for outer function`() {
             val code = """
                 fun doSomething() {}
                 
@@ -91,12 +97,13 @@ class RedundantHigherOrderMapUsageSpec : Spek({
                         it
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("return for outer lambda") {
+        @Test
+        fun `return for outer lambda`() {
             val code = """
                 fun test(list: List<Int>): List<String> {
                     return listOf("a", "b", "c").map outer@{ s ->
@@ -106,77 +113,84 @@ class RedundantHigherOrderMapUsageSpec : Spek({
                         }.joinToString("") + s
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("implicit receiver") {
+        @Test
+        fun `implicit receiver`() {
             val code = """
                 fun List<Int>.test() {
                     map { it }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("this receiver") {
+        @Test
+        fun `this receiver`() {
             val code = """
                 fun List<Int>.test() {
                     this.map { it }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("mutable list receiver") {
+        @Test
+        fun `mutable list receiver`() {
             val code = """
                 fun test() {
                     mutableListOf(1).map { it }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("sequence receiver") {
+        @Test
+        fun `sequence receiver`() {
             val code = """
                 fun test() {
                     val x:Sequence<Int> = sequenceOf(1).map { it }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("set receiver") {
+        @Test
+        fun `set receiver`() {
             val code = """
                 fun test() {
                     setOf(1).map { it }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings[0]).hasMessage("This 'map' call can be replaced with 'toList'.")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement().hasMessage("This 'map' call can be replaced with 'toList'.")
         }
     }
 
-    describe("does not report RedundantHigherOrderMapUsage rule") {
-        it("last statement is not lambda parameter") {
+    @Nested
+    inner class `does not report RedundantHigherOrderMapUsage rule` {
+        @Test
+        fun `last statement is not lambda parameter`() {
             val code = """
                 fun test() {
                     listOf(1, 2, 3)
                         .filter { it > 1 }
                         .map { it + 1 }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("labeled return is not lambda parameter") {
+        @Test
+        fun `labeled return is not lambda parameter`() {
             val code = """
                 fun test(list: List<Int>) {
                     list.map {
@@ -184,29 +198,31 @@ class RedundantHigherOrderMapUsageSpec : Spek({
                         it
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("destructuring lambda parameter") {
+        @Test
+        fun `destructuring lambda parameter`() {
             val code = """
                 fun test() {
                     listOf(1 to 2).map { (a, b) -> a }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("map receiver") {
+        @Test
+        fun `map receiver`() {
             val code = """
                 fun test() {
                     val x: List<Map.Entry<Int, String>> = mapOf(1 to "a").map { it }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
     }
-})
+}

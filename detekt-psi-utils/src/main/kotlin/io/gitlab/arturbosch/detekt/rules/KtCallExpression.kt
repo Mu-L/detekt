@@ -4,18 +4,20 @@ import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
-import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
+import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
 
-fun KtCallExpression.isCalling(fqName: FqName, bindingContext: BindingContext): Boolean {
-    return bindingContext != BindingContext.EMPTY &&
-        calleeExpression?.text == fqName.shortName().asString() &&
-        getResolvedCall(bindingContext)?.resultingDescriptor?.fqNameSafe == fqName
+fun KtCallExpression.isCalling(fqName: FqName, bindingContext: BindingContext): Boolean =
+    isCalling(listOf(fqName), bindingContext)
+
+fun KtCallExpression.isCalling(fqNames: List<FqName>, bindingContext: BindingContext): Boolean {
+    if (bindingContext == BindingContext.EMPTY) return false
+    return getResolvedCall(bindingContext)?.resultingDescriptor?.fqNameOrNull() in fqNames
 }
 
 fun KtCallExpression.isCallingWithNonNullCheckArgument(
     fqName: FqName,
-    bindingContext: BindingContext
+    bindingContext: BindingContext,
 ): Boolean {
     val argument = valueArguments.firstOrNull()?.getArgumentExpression() as? KtBinaryExpression ?: return false
     return argument.isNonNullCheck() && isCalling(fqName, bindingContext)

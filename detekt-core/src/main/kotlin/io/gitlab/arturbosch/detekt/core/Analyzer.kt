@@ -1,183 +1,140 @@
 package io.gitlab.arturbosch.detekt.core
 
 import io.github.detekt.psi.absolutePath
-import io.github.detekt.tooling.api.spec.ProcessingSpec
-import io.gitlab.arturbosch.detekt.api.BaseRule
+import io.gitlab.arturbosch.detekt.api.CompilerResources
 import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.api.Entity
 import io.gitlab.arturbosch.detekt.api.FileProcessListener
 import io.gitlab.arturbosch.detekt.api.Finding
-import io.gitlab.arturbosch.detekt.api.MultiRule
+import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Location
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.RuleSetId
-import io.gitlab.arturbosch.detekt.api.RuleSetProvider
-import io.gitlab.arturbosch.detekt.api.internal.CompilerResources
+import io.gitlab.arturbosch.detekt.api.RuleInstance
+import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.internal.whichDetekt
 import io.gitlab.arturbosch.detekt.api.internal.whichJava
 import io.gitlab.arturbosch.detekt.api.internal.whichOS
-import io.gitlab.arturbosch.detekt.core.config.AllRulesConfig
-import io.gitlab.arturbosch.detekt.core.config.DefaultConfig
-import io.gitlab.arturbosch.detekt.core.config.DisabledAutoCorrectConfig
-import io.gitlab.arturbosch.detekt.core.rules.associateRuleIdsToRuleSetIds
-import io.gitlab.arturbosch.detekt.core.rules.isActive
-import io.gitlab.arturbosch.detekt.core.rules.shouldAnalyzeFile
-import io.gitlab.arturbosch.detekt.core.suppressors.getSuppressors
+import io.gitlab.arturbosch.detekt.core.suppressors.buildSuppressors
+import io.gitlab.arturbosch.detekt.core.suppressors.isSuppressedBy
+import io.gitlab.arturbosch.detekt.core.util.shouldAnalyzeFile
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowValueFactoryImpl
-
-private typealias FindingsResult = List<Map<RuleSetId, List<Finding>>>
+import java.nio.file.Path
 
 internal class Analyzer(
     private val settings: ProcessingSettings,
-    private val providers: List<RuleSetProvider>,
-    private val processors: List<FileProcessListener>
+    private val rules: List<RuleDescriptor>,
+    private val processors: List<FileProcessListener>,
+    private val bindingContext: BindingContext,
 ) {
-
-    private val config: Config = settings.spec.workaroundConfiguration(settings.config)
-
-    fun run(
-        ktFiles: Collection<KtFile>,
-        bindingContext: BindingContext = BindingContext.EMPTY
-    ): Map<RuleSetId, List<Finding>> {
+    fun run(ktFiles: Collection<KtFile>): List<Issue> {
         val languageVersionSettings = settings.environment.configuration.languageVersionSettings
 
-        @Suppress("DEPRECATION")
         val dataFlowValueFactory = DataFlowValueFactoryImpl(languageVersionSettings)
         val compilerResources = CompilerResources(languageVersionSettings, dataFlowValueFactory)
-        val findingsPerFile: FindingsResult =
-            if (settings.spec.executionSpec.parallelAnalysis) {
-                runAsync(ktFiles, bindingContext, compilerResources)
-            } else {
-                runSync(ktFiles, bindingContext, compilerResources)
-            }
-
-        val findingsPerRuleSet = HashMap<RuleSetId, List<Finding>>()
-        for (findings in findingsPerFile) {
-            findingsPerRuleSet.mergeSmells(findings)
+        return if (settings.spec.executionSpec.parallelAnalysis) {
+            runAsync(ktFiles, compilerResources)
+        } else {
+            runSync(ktFiles, compilerResources)
         }
-        return findingsPerRuleSet
     }
 
     private fun runSync(
         ktFiles: Collection<KtFile>,
-        bindingContext: BindingContext,
-        compilerResources: CompilerResources
-    ): FindingsResult =
-        ktFiles.map { file ->
-            processors.forEach { it.onProcess(file, bindingContext) }
-            val findings = runCatching { analyze(file, bindingContext, compilerResources) }
+        compilerResources: CompilerResources,
+    ): List<Issue> =
+        ktFiles.flatMap { file ->
+            processors.forEach { it.onProcess(file) }
+            val issues = runCatching { analyze(file, compilerResources) }
                 .onFailure { throwIllegalStateException(file, it) }
-                .getOrDefault(emptyMap())
-            processors.forEach { it.onProcessComplete(file, findings, bindingContext) }
-            findings
+                .getOrDefault(emptyList())
+            processors.forEach { it.onProcessComplete(file, issues) }
+            issues
         }
 
     private fun runAsync(
         ktFiles: Collection<KtFile>,
-        bindingContext: BindingContext,
-        compilerResources: CompilerResources
-    ): FindingsResult {
+        compilerResources: CompilerResources,
+    ): List<Issue> {
         val service = settings.taskPool
-        val tasks: TaskList<Map<RuleSetId, List<Finding>>?> = ktFiles.map { file ->
+        val tasks: TaskList<List<Issue>?> = ktFiles.map { file ->
             service.task {
-                processors.forEach { it.onProcess(file, bindingContext) }
-                val findings = analyze(file, bindingContext, compilerResources)
-                processors.forEach { it.onProcessComplete(file, findings, bindingContext) }
-                findings
+                processors.forEach { it.onProcess(file) }
+                val issues = analyze(file, compilerResources)
+                processors.forEach { it.onProcessComplete(file, issues) }
+                issues
             }.recover { throwIllegalStateException(file, it) }
         }
-        return awaitAll(tasks).filterNotNull()
+        return awaitAll(tasks).filterNotNull().flatten()
     }
 
     private fun analyze(
         file: KtFile,
-        bindingContext: BindingContext,
-        compilerResources: CompilerResources
-    ): Map<RuleSetId, List<Finding>> {
-        fun isCorrectable(rule: BaseRule): Boolean = when (rule) {
-            is Rule -> rule.autoCorrect
-            is MultiRule -> rule.rules.any { it.autoCorrect }
-            else -> error("No other rule type expected.")
-        }
-
-        val activeRuleSetsToRuleSetConfigs = providers.asSequence()
-            .map { it to config.subConfig(it.ruleSetId) }
-            .filter { (_, ruleSetConfig) -> ruleSetConfig.isActive() }
-            .map { (provider, ruleSetConfig) -> provider.instance(ruleSetConfig) to ruleSetConfig }
-            .filter { (_, ruleSetConfig) -> ruleSetConfig.shouldAnalyzeFile(file) }
-
-        val ruleIdsToRuleSetIds = associateRuleIdsToRuleSetIds(
-            activeRuleSetsToRuleSetConfigs.map { (ruleSet, _) -> ruleSet }
-        )
-
-        val (correctableRules, otherRules) = activeRuleSetsToRuleSetConfigs
-            .flatMap { (ruleSet, _) -> ruleSet.rules.asSequence() }
-            .partition { isCorrectable(it) }
-
-        val result = HashMap<RuleSetId, MutableList<Finding>>()
-
-        fun executeRules(rules: List<BaseRule>) {
-            for (rule in rules) {
-                rule.visitFile(file, bindingContext, compilerResources)
-                for (finding in filterSuppressedFindings(rule)) {
-                    val mappedRuleSet = checkNotNull(ruleIdsToRuleSetIds[finding.id]) {
-                        "Mapping for '${finding.id}' expected."
-                    }
-                    result.computeIfAbsent(mappedRuleSet) { mutableListOf() }
-                        .add(finding)
-                }
+        compilerResources: CompilerResources,
+    ): List<Issue> {
+        val (correctableRules, otherRules) = rules.asSequence()
+            .filter { ruleDescriptor ->
+                ruleDescriptor.config.parent?.shouldAnalyzeFile(file, settings.spec.projectSpec.basePath) != false
             }
+            .filter { ruleDescriptor ->
+                ruleDescriptor.config.shouldAnalyzeFile(file, settings.spec.projectSpec.basePath)
+            }
+            .map { ruleDescriptor ->
+                ruleDescriptor.ruleInstance to ruleDescriptor.ruleProvider(ruleDescriptor.config)
+            }
+            .filterNot { (ruleInstance, rule) ->
+                file.isSuppressedBy(ruleInstance.id, rule.aliases, ruleInstance.ruleSetId)
+            }
+            .onEach { (_, rule) -> if (rule is RequiresFullAnalysis) rule.setBindingContext(bindingContext) }
+            .partition { (_, rule) -> rule.autoCorrect }
+
+        return (correctableRules + otherRules).flatMap { (ruleInstance, rule) ->
+            rule.visitFile(file, compilerResources)
+                .filterNot {
+                    it.entity.ktElement.isSuppressedBy(ruleInstance.id, rule.aliases, ruleInstance.ruleSetId)
+                }
+                .filterSuppressedFindings(rule, bindingContext)
+                .map { it.toIssue(ruleInstance, ruleInstance.severity, settings.spec.projectSpec.basePath) }
         }
-
-        executeRules(correctableRules)
-        executeRules(otherRules)
-
-        return result
     }
 }
 
-private fun filterSuppressedFindings(rule: BaseRule): List<Finding> {
-    val suppressors = getSuppressors(rule)
+private fun List<Finding>.filterSuppressedFindings(rule: Rule, bindingContext: BindingContext): List<Finding> {
+    val suppressors = buildSuppressors(rule, bindingContext)
     return if (suppressors.isNotEmpty()) {
-        rule.findings.filter { finding -> !suppressors.any { suppressor -> suppressor(finding) } }
+        filter { finding -> !suppressors.any { suppressor -> suppressor.shouldSuppress(finding) } }
     } else {
-        rule.findings
-    }
-}
-
-private fun MutableMap<String, List<Finding>>.mergeSmells(other: Map<String, List<Finding>>) {
-    for ((key, findings) in other.entries) {
-        merge(key, findings) { f1, f2 -> f1.plus(f2) }
+        this
     }
 }
 
 private fun throwIllegalStateException(file: KtFile, error: Throwable): Nothing {
     val message = """
-    Analyzing ${file.absolutePath()} led to an exception. 
-    The original exception message was: ${error.localizedMessage}
-    Running detekt '${whichDetekt() ?: "unknown"}' on Java '${whichJava()}' on OS '${whichOS()}'
-    If the exception message does not help, please feel free to create an issue on our GitHub page.
+        Analyzing ${file.absolutePath()} led to an exception.
+        Location: ${error.stackTrace.firstOrNull()?.toString()}
+        The original exception message was: ${error.localizedMessage}
+        Running detekt '${whichDetekt()}' on Java '${whichJava()}' on OS '${whichOS()}'
+        If the exception message does not help, please feel free to create an issue on our GitHub page.
     """.trimIndent()
     throw IllegalStateException(message, error)
 }
 
-internal fun ProcessingSpec.workaroundConfiguration(config: Config): Config = with(configSpec) {
-    var declaredConfig: Config? = when {
-        configPaths.isNotEmpty() -> config
-        resources.isNotEmpty() -> config
-        useDefaultConfig -> config
-        else -> null
-    }
+private fun Finding.toIssue(rule: RuleInstance, severity: Severity, basePath: Path): Issue = Issue(
+    ruleInstance = rule,
+    entity = entity.toIssue(basePath),
+    references = references.map { it.toIssue(basePath) },
+    message = message,
+    severity = severity,
+    suppressReasons = suppressReasons,
+)
 
-    if (rulesSpec.activateAllRules) {
-        val defaultConfig = DefaultConfig.newInstance()
-        declaredConfig = AllRulesConfig(declaredConfig ?: defaultConfig, defaultConfig)
-    }
+private fun Entity.toIssue(basePath: Path): Issue.Entity =
+    Issue.Entity(signature, location.toIssue(basePath))
 
-    if (!rulesSpec.autoCorrect) {
-        declaredConfig = DisabledAutoCorrectConfig(declaredConfig ?: DefaultConfig.newInstance())
-    }
+private fun Location.toIssue(basePath: Path): Issue.Location =
+    Issue.Location(source, endSource, text, basePath.relativize(path))
 
-    return declaredConfig ?: DefaultConfig.newInstance()
-}
+private val Rule.aliases: Set<String> get() = config.valueOrDefault(Config.ALIASES_KEY, emptyList<String>()).toSet()

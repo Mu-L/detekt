@@ -1,12 +1,10 @@
 package io.gitlab.arturbosch.detekt.api
 
-import io.gitlab.arturbosch.detekt.api.Config.Companion.SEVERITY_KEY
-import io.gitlab.arturbosch.detekt.api.internal.DefaultContext
-import io.gitlab.arturbosch.detekt.api.internal.PathFilters
-import io.gitlab.arturbosch.detekt.api.internal.createPathFilters
-import io.gitlab.arturbosch.detekt.api.internal.isSuppressedBy
+import dev.drewhamilton.poko.Poko
+import io.gitlab.arturbosch.detekt.api.internal.validateIdentifier
 import org.jetbrains.kotlin.psi.KtFile
-import java.util.Locale
+import org.jetbrains.kotlin.resolve.BindingContext
+import java.net.URI
 
 /**
  * A rule defines how one specific code structure should look like. If code is found
@@ -16,89 +14,96 @@ import java.util.Locale
  * A rule is implemented using the visitor pattern and should be started using the visit(KtFile)
  * function. If calculations must be done before or after the visiting process, here are
  * two predefined (preVisit/postVisit) functions which can be overridden to setup/teardown additional data.
+ *
+ * @property url An url pointing to the documentation of this rule
  */
-abstract class Rule(
-    override val ruleSetConfig: Config = Config.empty,
-    ruleContext: Context = DefaultContext()
-) : BaseRule(ruleContext), ConfigAware {
-
-    /**
-     * A rule is motivated to point out a specific issue in the code base.
-     */
-    abstract val issue: Issue
+open class Rule(
+    val config: Config,
+    val description: String,
+    val url: URI? = null,
+) : DetektVisitor() {
 
     /**
      * An id this rule is identified with.
-     * Conventionally the rule id is derived from the issue id as these two classes have a coexistence.
-     */
-    final override val ruleId: RuleId get() = issue.id
-
-    /**
-     * List of rule ids which can optionally be used in suppress annotations to refer to this rule.
-     */
-    val aliases: Set<String> get() = valueOrDefault("aliases", defaultRuleIdAliases)
-
-    /**
-     * The default names which can be used instead of this [ruleId] to refer to this rule in suppression's.
      *
-     * When overriding this property make sure to meet following structure for detekt-generator to pick
-     * it up and generate documentation for aliases:
-     *
-     *      override val defaultRuleIdAliases = setOf("Name1", "Name2")
+     * By default, it is the name of the class name. Override to change it.
      */
-    open val defaultRuleIdAliases: Set<String> = emptySet()
+    open val ruleName: Name get() = Name(javaClass.simpleName)
 
-    internal val ruleSetId: RuleId? get() = ruleSetConfig.parentPath
+    protected lateinit var compilerResources: CompilerResources
+    private lateinit var _bindingContext: BindingContext
+
+    @Suppress("UnusedReceiverParameter")
+    val RequiresFullAnalysis.bindingContext: BindingContext
+        get() = _bindingContext
+
+    val autoCorrect: Boolean
+        get() = config.valueOrDefault(Config.AUTO_CORRECT_KEY, false) &&
+            (config.parent?.valueOrDefault(Config.AUTO_CORRECT_KEY, true) != false)
+
+    private val findings: MutableList<Finding> = mutableListOf()
 
     /**
-     * Rules are aware of the paths they should run on via configuration properties.
+     * Before starting visiting kotlin elements, a check is performed if this rule should be triggered.
+     * Pre- and post-visit-hooks are executed before/after the visiting process.
+     * BindingContext holds the result of the semantic analysis of the source code by the Kotlin compiler. Rules that
+     * rely on symbols and types being resolved can use the BindingContext for this analysis. Note that detekt must
+     * receive the correct compile classpath for the code being analyzed otherwise the default value
+     * [BindingContext.EMPTY] will be used and it will not be possible for detekt to resolve types or symbols.
      */
-    open val filters: PathFilters? by lazy(LazyThreadSafetyMode.NONE) {
-        createPathFilters()
-    }
-
-    override fun visitCondition(root: KtFile): Boolean =
-        active && shouldRunOnGivenFile(root) && !root.isSuppressedBy(ruleId, aliases, ruleSetId)
-
-    private fun shouldRunOnGivenFile(root: KtFile) =
-        filters?.isIgnored(root)?.not() ?: true
-
-    /**
-     * Compute severity in the priority order:
-     * - Severity of the rule
-     * - Severity of the parent ruleset
-     * - Default severity: warning
-     */
-    private fun computeSeverity(): SeverityLevel {
-        val configValue: String = valueOrNull(SEVERITY_KEY)
-            ?: ruleSetConfig.valueOrDefault(SEVERITY_KEY, "warning")
-        return enumValueOf(configValue.toUpperCase(Locale.US))
+    fun visitFile(
+        root: KtFile,
+        compilerResources: CompilerResources,
+    ): List<Finding> {
+        findings.clear()
+        this.compilerResources = compilerResources
+        preVisit(root)
+        visit(root)
+        postVisit(root)
+        return findings
     }
 
     /**
-     * Simplified version of [Context.report] with rule defaults.
+     * Could be overridden by subclasses to specify a behaviour which should be done before
+     * visiting kotlin elements.
+     */
+    protected open fun preVisit(root: KtFile) {
+        // nothing to do by default
+    }
+
+    /**
+     * Init function to start visiting the [KtFile].
+     * Can be overridden to start a different visiting process.
+     */
+    open fun visit(root: KtFile) {
+        root.accept(this)
+    }
+
+    /**
+     * Could be overridden by subclasses to specify a behaviour which should be done after
+     * visiting kotlin elements.
+     */
+    protected open fun postVisit(root: KtFile) {
+        // nothing to do by default
+    }
+
+    /**
+     * Adds a new finding
      */
     fun report(finding: Finding) {
-        (finding as? CodeSmell)?.internalSeverity = computeSeverity()
-        report(finding, aliases, ruleSetId)
+        findings.add(finding)
     }
 
-    /**
-     * Simplified version of [Context.report] with rule defaults.
-     */
-    fun report(findings: List<Finding>) {
-        findings.forEach {
-            (it as? CodeSmell)?.internalSeverity = computeSeverity()
+    fun setBindingContext(bindingContext: BindingContext) {
+        _bindingContext = bindingContext
+    }
+
+    @Poko
+    class Name(val value: String) {
+        init {
+            validateIdentifier(value)
         }
-        report(
-            findings,
-            aliases,
-            ruleSetId
-        )
+
+        override fun toString(): String = value
     }
 }
-
-/**
- * The type to use when referring to rule ids giving it more context then a String would.
- */
-typealias RuleId = String

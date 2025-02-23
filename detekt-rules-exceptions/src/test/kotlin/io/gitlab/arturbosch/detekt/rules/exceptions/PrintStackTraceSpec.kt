@@ -1,30 +1,33 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.test.compileAndLint
+import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.test.lint
 import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 
-class PrintStackTraceSpec : Spek({
-    val subject by memoized { PrintStackTrace() }
+class PrintStackTraceSpec {
+    val subject = PrintStackTrace(Config.empty)
 
-    describe("PrintStackTrace") {
+    @Nested
+    inner class `catch clauses with printStacktrace methods` {
 
-        context("catch clauses with printStacktrace methods") {
-
-            it("prints a stacktrace") {
-                val code = """
+        @Test
+        fun `prints a stacktrace`() {
+            val code = """
                 fun x() {
                     try {
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
-                }"""
-                assertThat(subject.compileAndLint(code)).hasSize(1)
-            }
+                }
+            """.trimIndent()
+            assertThat(subject.lint(code)).hasSize(1)
+        }
 
-            it("does not print a stacktrace") {
-                val code = """
+        @Test
+        fun `does not print a stacktrace`() {
+            val code = """
                 fun x() {
                     try {
                     } catch (e: Exception) {
@@ -34,23 +37,25 @@ class PrintStackTraceSpec : Spek({
                         printStackTrace()
                     }
                 }
-                """
-                assertThat(subject.compileAndLint(code)).isEmpty()
-            }
-        }
-
-        context("a stacktrace printed by a thread") {
-
-            it("prints one") {
-                val code = """
-                fun x() {
-                    Thread.dumpStack()
-
-                    fun dumpStack() {}
-                    dumpStack()
-                }"""
-                assertThat(subject.compileAndLint(code)).hasSize(1)
-            }
+            """.trimIndent()
+            assertThat(subject.lint(code)).isEmpty()
         }
     }
-})
+
+    @Nested
+    inner class `a stacktrace printed by a thread` {
+
+        @Test
+        fun `prints one`() {
+            val code = """
+                fun x() {
+                    Thread.dumpStack()
+                
+                    fun dumpStack() {}
+                    dumpStack()
+                }
+            """.trimIndent()
+            assertThat(subject.lint(code)).hasSize(1)
+        }
+    }
+}

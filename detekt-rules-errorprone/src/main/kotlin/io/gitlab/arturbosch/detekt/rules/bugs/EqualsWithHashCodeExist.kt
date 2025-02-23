@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import io.gitlab.arturbosch.detekt.rules.isEqualsFunction
 import io.gitlab.arturbosch.detekt.rules.isHashCodeFunction
 import org.jetbrains.kotlin.com.intellij.psi.PsiFile
@@ -45,17 +42,13 @@ import org.jetbrains.kotlin.psi.KtNamedFunction
  * </compliant>
  */
 @ActiveByDefault(since = "1.0.0")
-class EqualsWithHashCodeExist(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "EqualsWithHashCodeExist",
-        Severity.Defect,
-        "Always override hashCode when you override equals. " +
-            "All hash-based collections depend on objects meeting the equals-contract. " +
-            "Two equal objects must produce the same hashcode. When inheriting equals or hashcode, " +
-            "override the inherited and call the super method for clarification.",
-        Debt.FIVE_MINS
-    )
+class EqualsWithHashCodeExist(config: Config) : Rule(
+    config,
+    "Always override hashCode when you override equals. " +
+        "All hash-based collections depend on objects meeting the equals-contract. " +
+        "Two equal objects must produce the same hashcode. When inheriting equals or hashcode, " +
+        "override the inherited and call the super method for clarification."
+) {
 
     private val queue = ArrayDeque<ViolationHolder>(MAXIMUM_EXPECTED_NESTED_CLASSES)
 
@@ -75,8 +68,7 @@ class EqualsWithHashCodeExist(config: Config = Config.empty) : Rule(config) {
         super.visitClassOrObject(classOrObject)
         if (queue.removeFirst().violation()) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.atName(classOrObject),
                     "A class should always override hashCode " +
                         "when overriding equals and the other way around."

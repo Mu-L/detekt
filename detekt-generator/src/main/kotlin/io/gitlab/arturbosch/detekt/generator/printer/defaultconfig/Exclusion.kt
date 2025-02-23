@@ -5,7 +5,7 @@ import io.gitlab.arturbosch.detekt.generator.collection.Rule
 /**
  * Holds a list of extra exclusions for rules and rule sets.
  */
-val exclusions = arrayOf(TestExclusions, KotlinScriptExclusions, LibraryExclusions)
+val exclusions = arrayOf(TestExclusions, KotlinScriptExclusions, KotlinScriptAndTestExclusions)
 
 /**
  * Tracks rules and rule sets which needs an extra `excludes: $pattern` property
@@ -17,24 +17,33 @@ abstract class Exclusions {
     open val ruleSets: Set<String> = emptySet()
     abstract val rules: Set<String>
 
-    fun isExcluded(rule: Rule) = rule.name in rules || rule.inMultiRule in rules
+    fun isExcluded(rule: Rule) = rule.name in rules
+
+    companion object {
+        internal val testFolders = listOf(
+            "test",
+            "androidTest",
+            "commonTest",
+            "jvmTest",
+            "androidUnitTest",
+            "androidInstrumentedTest",
+            "jsTest",
+            "iosTest",
+        )
+    }
 }
 
 private object TestExclusions : Exclusions() {
-
-    override val pattern =
-        "['**/test/**', '**/androidTest/**', '**/commonTest/**', '**/jvmTest/**', '**/jsTest/**', '**/iosTest/**']"
+    override val pattern = testFolders.map { "**/$it/**" }
+        .joinToString(prefix = "[", separator = ", ", postfix = "]") { "'$it'" }
     override val ruleSets = emptySet<String>()
     override val rules = setOf(
-        "NamingRules",
-        "WildcardImport",
-        "MagicNumber",
+        "FunctionNaming",
         "LateinitUsage",
         "StringLiteralDuplication",
         "SpreadOperator",
         "TooManyFunctions",
         "ForEachOnRange",
-        "FunctionMaxLength",
         "TooGenericExceptionCaught",
         "InstanceOfCheckForException",
         "ThrowingExceptionsWithoutMessageOrCause",
@@ -42,21 +51,17 @@ private object TestExclusions : Exclusions() {
         "UndocumentedPublicFunction",
         "UndocumentedPublicProperty",
         "UnsafeCallOnNullableType",
+        "KDocReferencesNonPublicProperty",
     )
 }
 
 private object KotlinScriptExclusions : Exclusions() {
-
     override val pattern = "['**/*.kts']"
     override val rules = setOf("MissingPackageDeclaration")
 }
 
-private object LibraryExclusions : Exclusions() {
-
-    override val pattern = "['**']"
-    override val rules = setOf(
-        "ForbiddenPublicDataClass",
-        "LibraryCodeMustSpecifyReturnType",
-        "LibraryEntitiesShouldNotBePublic",
-    )
+private object KotlinScriptAndTestExclusions : Exclusions() {
+    override val pattern = (testFolders.map { "**/$it/**" } + "**/*.kts")
+        .joinToString(prefix = "[", separator = ", ", postfix = "]") { "'$it'" }
+    override val rules = setOf("MagicNumber")
 }

@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.KtNodeTypes
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -20,8 +17,7 @@ import org.jetbrains.kotlin.psi.KtPrefixExpression
 import org.jetbrains.kotlin.psi.KtThisExpression
 import org.jetbrains.kotlin.psi.psiUtil.blockExpressionsOrSingle
 import org.jetbrains.kotlin.psi.psiUtil.getPossiblyQualifiedCallExpression
-import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
 
 /**
@@ -47,21 +43,18 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
  * </compliant>
  *
  */
-@RequiresTypeResolution
-@Suppress("ReturnCount", "ComplexMethod")
-class UseIfEmptyOrIfBlank(config: Config = Config.empty) : Rule(config) {
-    override val issue: Issue = Issue(
-        "UseIfEmptyOrIfBlank",
-        Severity.Style,
-        "Use 'ifEmpty' or 'ifBlank' instead of 'isEmpty' or 'isBlank' to assign default value.",
-        Debt.FIVE_MINS
-    )
+class UseIfEmptyOrIfBlank(config: Config) :
+    Rule(
+        config,
+        "Use `ifEmpty` or `ifBlank` instead of `isEmpty` or `isBlank` to assign a default value."
+    ),
+    RequiresFullAnalysis {
 
+    @Suppress("ReturnCount", "CyclomaticComplexMethod")
     override fun visitIfExpression(expression: KtIfExpression) {
         super.visitIfExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
 
-        if (expression.isElseIf()) return
+        if (expression.parent.node.elementType == KtNodeTypes.ELSE) return
         val thenExpression = expression.then ?: return
         val elseExpression = expression.`else` ?: return
         if (elseExpression is KtIfExpression) return
@@ -83,11 +76,10 @@ class UseIfEmptyOrIfBlank(config: Config = Config.empty) : Rule(config) {
 
         val message =
             "This '$conditionCalleeExpressionText' call can be replaced with '${replacement.replacementFunctionName}'"
-        report(CodeSmell(issue, Entity.from(conditionCalleeExpression), message))
+        report(Finding(Entity.from(conditionCalleeExpression), message))
     }
 
-    private fun KtExpression.isElseIf(): Boolean = parent.node.elementType == KtNodeTypes.ELSE
-
+    @Suppress("ReturnCount")
     private fun KtIfExpression.condition(): Pair<KtExpression, Boolean>? {
         val condition = this.condition ?: return null
         return if (condition is KtPrefixExpression) {
@@ -99,6 +91,7 @@ class UseIfEmptyOrIfBlank(config: Config = Config.empty) : Rule(config) {
         }
     }
 
+    @Suppress("ReturnCount")
     private fun KtCallExpression.replacement(): Replacement? {
         val descriptor = getResolvedCall(bindingContext)?.resultingDescriptor ?: return null
         val receiverParameter = descriptor.dispatchReceiverParameter ?: descriptor.extensionReceiverParameter
@@ -111,25 +104,25 @@ class UseIfEmptyOrIfBlank(config: Config = Config.empty) : Rule(config) {
     private data class Replacement(
         val conditionFunctionFqName: FqName,
         val replacementFunctionName: String,
-        val negativeCondition: Boolean = false
+        val negativeCondition: Boolean = false,
     )
 
     companion object {
-        private const val ifBlank = "ifBlank"
+        private const val IF_BLANK = "ifBlank"
 
-        private const val ifEmpty = "ifEmpty"
+        private const val IF_EMPTY = "ifEmpty"
 
         private val replacements = listOf(
-            Replacement(FqName("kotlin.text.isBlank"), ifBlank),
-            Replacement(FqName("kotlin.text.isEmpty"), ifEmpty),
-            Replacement(FqName("kotlin.collections.List.isEmpty"), ifEmpty),
-            Replacement(FqName("kotlin.collections.Set.isEmpty"), ifEmpty),
-            Replacement(FqName("kotlin.collections.Map.isEmpty"), ifEmpty),
-            Replacement(FqName("kotlin.collections.Collection.isEmpty"), ifEmpty),
-            Replacement(FqName("kotlin.text.isNotBlank"), ifBlank, negativeCondition = true),
-            Replacement(FqName("kotlin.text.isNotEmpty"), ifEmpty, negativeCondition = true),
-            Replacement(FqName("kotlin.collections.isNotEmpty"), ifEmpty, negativeCondition = true),
-            Replacement(FqName("kotlin.String.isEmpty"), ifEmpty)
+            Replacement(FqName("kotlin.text.isBlank"), IF_BLANK),
+            Replacement(FqName("kotlin.text.isEmpty"), IF_EMPTY),
+            Replacement(FqName("kotlin.collections.List.isEmpty"), IF_EMPTY),
+            Replacement(FqName("kotlin.collections.Set.isEmpty"), IF_EMPTY),
+            Replacement(FqName("kotlin.collections.Map.isEmpty"), IF_EMPTY),
+            Replacement(FqName("kotlin.collections.Collection.isEmpty"), IF_EMPTY),
+            Replacement(FqName("kotlin.text.isNotBlank"), IF_BLANK, negativeCondition = true),
+            Replacement(FqName("kotlin.text.isNotEmpty"), IF_EMPTY, negativeCondition = true),
+            Replacement(FqName("kotlin.collections.isNotEmpty"), IF_EMPTY, negativeCondition = true),
+            Replacement(FqName("kotlin.String.isEmpty"), IF_EMPTY)
         ).associateBy { it.conditionFunctionFqName }
 
         private val conditionFunctionShortNames = replacements.keys.map { it.shortName().asString() }.toSet()

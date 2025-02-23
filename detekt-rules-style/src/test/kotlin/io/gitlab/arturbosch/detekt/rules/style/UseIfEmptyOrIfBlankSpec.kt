@@ -1,33 +1,38 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.rules.setupKotlinEnvironment
+import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.rules.KotlinCoreEnvironmentTest
 import io.gitlab.arturbosch.detekt.test.assertThat
-import io.gitlab.arturbosch.detekt.test.compileAndLintWithContext
+import io.gitlab.arturbosch.detekt.test.lintWithContext
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 
-class UseIfEmptyOrIfBlankSpec : Spek({
-    setupKotlinEnvironment()
-    val env: KotlinCoreEnvironment by memoized()
-    val subject by memoized { UseIfEmptyOrIfBlank() }
+@KotlinCoreEnvironmentTest
+class UseIfEmptyOrIfBlankSpec(val env: KotlinCoreEnvironment) {
+    val subject = UseIfEmptyOrIfBlank(Config.empty)
 
-    describe("report UseIfEmptyOrIfBlank rule") {
-        it("String.isBlank") {
+    @Nested
+    inner class `report UseIfEmptyOrIfBlank rule` {
+        @Test
+        @DisplayName("String.isBlank")
+        fun stringIsBlank() {
             val code = """
                 class Api(val name: String)
                 
                 fun test(api: Api) {
                     val name = if (api.name.isBlank()) "John" else api.name
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(4, 29)
-            assertThat(findings[0]).hasMessage("This 'isBlank' call can be replaced with 'ifBlank'")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement().hasMessage("This 'isBlank' call can be replaced with 'ifBlank'")
+            assertThat(findings).hasStartSourceLocation(4, 29)
         }
 
-        it("String.isNotBlank") {
+        @Test
+        @DisplayName("String.isNotBlank")
+        fun stringIsNotBlank() {
             val code = """
                 class Api(val name: String)
                 
@@ -37,28 +42,30 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                     else
                         "John"
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(4, 29)
-            assertThat(findings[0]).hasMessage("This 'isNotBlank' call can be replaced with 'ifBlank'")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement().hasMessage("This 'isNotBlank' call can be replaced with 'ifBlank'")
+            assertThat(findings).hasStartSourceLocation(4, 29)
         }
 
-        it("String.isEmpty") {
+        @Test
+        @DisplayName("String.isEmpty")
+        fun stringIsEmpty() {
             val code = """
                 class Api(val name: String)
                 
                 fun test(api: Api) {
                     val name = if (api.name.isEmpty()) "John" else api.name
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(4, 29)
-            assertThat(findings[0]).hasMessage("This 'isEmpty' call can be replaced with 'ifEmpty'")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement().hasMessage("This 'isEmpty' call can be replaced with 'ifEmpty'")
+            assertThat(findings).hasStartSourceLocation(4, 29)
         }
 
-        it("String.isNotEmpty") {
+        @Test
+        @DisplayName("String.isNotEmpty")
+        fun stringIsNotEmpty() {
             val code = """
                 class Api(val name: String)
                 
@@ -68,14 +75,15 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                     else
                         "John"
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocation(4, 29)
-            assertThat(findings[0]).hasMessage("This 'isNotEmpty' call can be replaced with 'ifEmpty'")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement().hasMessage("This 'isNotEmpty' call can be replaced with 'ifEmpty'")
+            assertThat(findings).hasStartSourceLocation(4, 29)
         }
 
-        it("List.isEmpty") {
+        @Test
+        @DisplayName("List.isEmpty")
+        fun listIsEmpty() {
             val code = """
                 fun test(list: List<Int>): List<Int> {
                     return if (list.isEmpty()) {
@@ -84,12 +92,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         list
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("List.isNotEmpty") {
+        @Test
+        @DisplayName("List.isNotEmpty")
+        fun listIsNotEmpty() {
             val code = """
                 fun test(list: List<Int>): List<Int> {
                     return if (list.isNotEmpty()) {
@@ -98,12 +108,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         listOf(1)
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("Set.isEmpty") {
+        @Test
+        @DisplayName("Set.isEmpty")
+        fun setIsEmpty() {
             val code = """
                 fun test(set: Set<Int>): Set<Int> {
                     return if (set.isEmpty()) {
@@ -112,12 +124,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         set
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("Set.isNotEmpty") {
+        @Test
+        @DisplayName("Set.isNotEmpty")
+        fun setIsNotEmpty() {
             val code = """
                 fun test(set: Set<Int>): Set<Int> {
                     return if (set.isNotEmpty()) {
@@ -126,12 +140,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         setOf(1)
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("Map.isEmpty") {
+        @Test
+        @DisplayName("Map.isEmpty")
+        fun mapIsEmpty() {
             val code = """
                 fun test(map: Map<Int, Int>): Map<Int, Int> {
                     return if (map.isEmpty()) {
@@ -140,12 +156,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         map
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("Map.isNotEmpty") {
+        @Test
+        @DisplayName("Map.isNotEmpty")
+        fun mapIsNotEmpty() {
             val code = """
                 fun test(map: Map<Int, Int>): Map<Int, Int> {
                     return if (map.isNotEmpty()) {
@@ -154,12 +172,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         mapOf(1 to 2)
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("Collection.isEmpty") {
+        @Test
+        @DisplayName("Collection.isEmpty")
+        fun collectionIsEmpty() {
             val code = """
                 fun test(collection: Collection<Int>): Collection<Int> {
                     return if (collection.isEmpty()) {
@@ -168,12 +188,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         collection
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("Collection.isNotEmpty") {
+        @Test
+        @DisplayName("Collection.isNotEmpty")
+        fun collectionIsNotEmpty() {
             val code = """
                 fun test(collection: Collection<Int>): Collection<Int> {
                     return if (collection.isNotEmpty()) {
@@ -182,12 +204,13 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         listOf(1)
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("implicit receiver") {
+        @Test
+        fun `implicit receiver`() {
             val code = """
                 fun String.test(): String {
                     return if (isBlank()) {
@@ -195,13 +218,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                     } else {
                         this
                     }
-                }                
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("default value block is not single statement") {
+        @Test
+        fun `default value block is not single statement`() {
             val code = """
                 fun test(list: List<Int>): List<Int> {
                     return if (list.isEmpty()) {
@@ -211,12 +235,13 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         list
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).hasSize(1)
         }
 
-        it("!isEmpty") {
+        @Test
+        fun `!isEmpty`() {
             val code = """
                 fun test(list: List<Int>): List<Int> {
                     return if (!list.isEmpty()) { // list.isNotEmpty()
@@ -225,42 +250,46 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         listOf(1)
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings[0]).hasMessage("This 'isEmpty' call can be replaced with 'ifEmpty'")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement().hasMessage("This 'isEmpty' call can be replaced with 'ifEmpty'")
         }
 
-        it("!isNotEmpty") {
+        @Test
+        fun `!isNotEmpty`() {
             val code = """
                 fun test(list: List<Int>): List<Int> {
-                    return if (!list.isNotEmpty()) { // list.isEmpty() 
+                    return if (!list.isNotEmpty()) { // list.isEmpty()
                         listOf(1)
                     } else {
                         list
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
-            assertThat(findings).hasSize(1)
-            assertThat(findings[0]).hasMessage("This 'isNotEmpty' call can be replaced with 'ifEmpty'")
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
+            assertThat(findings).singleElement().hasMessage("This 'isNotEmpty' call can be replaced with 'ifEmpty'")
         }
     }
 
-    describe("does not report UseIfEmptyOrIfBlank rule") {
-        it("String.isNullOrBlank") {
+    @Nested
+    inner class `does not report UseIfEmptyOrIfBlank rule` {
+        @Test
+        @DisplayName("String.isNullOrBlank")
+        fun stringIsNulLOrBlank() {
             val code = """
                 class Api(val name: String?)
                 
                 fun test(api: Api) {
                     val name = if (api.name.isNullOrBlank()) "John" else api.name
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("List.isNullOrEmpty") {
+        @Test
+        @DisplayName("List.isNullOrEmpty")
+        fun listIsNullOrEmpty() {
             val code = """
                 fun test2(list: List<Int>): List<Int> {
                     return if (list.isNullOrEmpty()) {
@@ -269,12 +298,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         list
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("Array.isEmpty") {
+        @Test
+        @DisplayName("Array.isEmpty")
+        fun arrayIsEmpty() {
             val code = """
                 fun test(arr: Array<String>): Array<String> {
                     return if (arr.isEmpty()) {
@@ -283,12 +314,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         arr
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("Array.isNotEmpty") {
+        @Test
+        @DisplayName("Array.isNotEmpty")
+        fun arrayIsNotEmpty() {
             val code = """
                 fun test(arr: Array<String>): Array<String> {
                     return if (arr.isNotEmpty()) {
@@ -297,12 +330,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         arrayOf("a")
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("IntArray.isEmpty") {
+        @Test
+        @DisplayName("IntArray.isEmpty")
+        fun intArrayIsEmpty() {
             val code = """
                 fun test(arr: IntArray): IntArray {
                     return if (arr.isEmpty()) {
@@ -311,12 +346,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         arr
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("IntArray.isNotEmpty") {
+        @Test
+        @DisplayName("IntArray.isNotEmpty")
+        fun intArrayIsNotEmpty() {
             val code = """
                 fun test(arr: IntArray): IntArray {
                     return if (arr.isNotEmpty()) {
@@ -325,12 +362,13 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         intArrayOf(1)
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("else if") {
+        @Test
+        fun `else if`() {
             val code = """
                 fun test(list: List<Int>, b: Boolean): List<Int> {
                     return if (list.isEmpty()) {
@@ -341,24 +379,26 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         list
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("no else") {
+        @Test
+        fun `no else`() {
             val code = """
                 fun test(list: List<Int>) {
                     if (list.isEmpty()) {
                         listOf(1)
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("not self value") {
+        @Test
+        fun `not self value`() {
             val code = """
                 fun test(list: List<Int>): List<Int> {
                     return if (list.isEmpty()) {
@@ -366,13 +406,14 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                     } else {
                         list + list
                     }
-                }                
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("self value block is not single statement") {
+        @Test
+        fun `self value block is not single statement`() {
             val code = """
                 fun test(list: List<Int>): List<Int> {
                     return if (list.isEmpty()) {
@@ -382,12 +423,13 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                         list
                     }
                 }
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
 
-        it("condition is binary expression") {
+        @Test
+        fun `condition is binary expression`() {
             val code = """
                 fun test(list: List<Int>): List<Int> {
                     return if (list.isEmpty() == true) {
@@ -395,10 +437,10 @@ class UseIfEmptyOrIfBlankSpec : Spek({
                     } else {
                         list
                     }
-                }                
-            """
-            val findings = subject.compileAndLintWithContext(env, code)
+                }
+            """.trimIndent()
+            val findings = subject.lintWithContext(env, code)
             assertThat(findings).isEmpty()
         }
     }
-})
+}

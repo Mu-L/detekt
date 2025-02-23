@@ -1,15 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.AnnotationExcluder
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
+import io.gitlab.arturbosch.detekt.rules.isExpect
 import io.gitlab.arturbosch.detekt.rules.isOpen
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtFile
@@ -28,7 +26,7 @@ import org.jetbrains.kotlin.types.KotlinType
  * Classes that simply hold data should be refactored into a `data class`. Data classes are specialized to hold data
  * and generate `hashCode`, `equals` and `toString` implementations as well.
  *
- * Read more about `data class`: https://kotlinlang.org/docs/data-classes.html
+ * Read more about [data classes](https://kotlinlang.org/docs/data-classes.html)
  *
  * <noncompliant>
  * class DataClassCandidate(val i: Int) {
@@ -45,37 +43,28 @@ import org.jetbrains.kotlin.types.KotlinType
  * class A(val b: B) : I by b
  * </compliant>
  */
-class UseDataClass(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        "UseDataClass",
-        Severity.Style,
-        "Classes that do nothing but hold data should be replaced with a data class.",
-        Debt.FIVE_MINS
-    )
-
-    @Configuration("allows to provide a list of annotations that disable this check")
-    @Deprecated("Use `ignoreAnnotated` instead")
-    private val excludeAnnotatedClasses: List<String> by config(emptyList<String>()) { classes ->
-        classes.map { it.removePrefix("*").removeSuffix("*") }
-    }
+class UseDataClass(config: Config) :
+    Rule(
+        config,
+        "Classes that do nothing but hold data should be replaced with a data class."
+    ),
+    RequiresFullAnalysis {
 
     @Configuration("allows to relax this rule in order to exclude classes that contains one (or more) vars")
     private val allowVars: Boolean by config(false)
 
     override fun visit(root: KtFile) {
         super.visit(root)
-        val annotationExcluder = AnnotationExcluder(root, @Suppress("DEPRECATION") excludeAnnotatedClasses)
-        root.forEachDescendantOfType<KtClass> { visitKlass(it, annotationExcluder) }
+        root.forEachDescendantOfType<KtClass> { visitKlass(it) }
     }
 
     @Suppress("ComplexMethod")
-    private fun visitKlass(klass: KtClass, annotationExcluder: AnnotationExcluder) {
+    private fun visitKlass(klass: KtClass) {
         if (isIncorrectClassType(klass) || hasOnlyPrivateConstructors(klass)) {
             return
         }
-        if (klass.isClosedForExtension() && klass.onlyExtendsSimpleInterfaces() &&
-            !annotationExcluder.shouldExclude(klass.annotationEntries)
+        if (klass.isClosedForExtension() &&
+            klass.onlyExtendsSimpleInterfaces()
         ) {
             val declarations = klass.body?.declarations.orEmpty()
             val properties = declarations.filterIsInstance<KtProperty>()
@@ -90,15 +79,16 @@ class UseDataClass(config: Config = Config.empty) : Rule(config) {
             val containsPropertyOrPropertyParameters = properties.isNotEmpty() || propertyParameters.isNotEmpty()
             val containsVars = properties.any { it.isVar } || propertyParameters.any { it.isMutable }
             val containsDelegatedProperty = properties.any { it.hasDelegate() }
+            val containsNonPropertyParameter = klass.extractConstructorNonPropertyParameters().isNotEmpty()
+            val containsOnlyPropertyParameters = containsPropertyOrPropertyParameters && !containsNonPropertyParameter
 
-            if (containsFunctions && containsPropertyOrPropertyParameters && !containsDelegatedProperty) {
+            if (containsFunctions && !containsDelegatedProperty && containsOnlyPropertyParameters) {
                 if (allowVars && containsVars) {
                     return
                 }
                 report(
-                    CodeSmell(
-                        issue,
-                        Entity.from(klass),
+                    Finding(
+                        Entity.atName(klass),
                         "The class ${klass.nameAsSafeName} defines no " +
                             "functionality and only holds data. Consider converting it to a data class."
                     )
@@ -124,7 +114,9 @@ class UseDataClass(config: Config = Config.empty) : Rule(config) {
             klass.isAnnotation() ||
             klass.isSealed() ||
             klass.isInline() ||
-            klass.isValue()
+            klass.isValue() ||
+            klass.isInner() ||
+            klass.isExpect()
 
     private fun hasOnlyPrivateConstructors(klass: KtClass): Boolean {
         val primaryConstructor = klass.primaryConstructor
@@ -138,11 +130,17 @@ class UseDataClass(config: Config = Config.empty) : Rule(config) {
             ?.filter { it.isPropertyParameter() }
             .orEmpty()
 
+    private fun KtClass.extractConstructorNonPropertyParameters(): List<KtParameter> =
+        getPrimaryConstructorParameterList()
+            ?.parameters
+            ?.filter { !it.isPropertyParameter() }
+            .orEmpty()
+
     private fun KtNamedFunction.isDefaultFunction(
         classType: KotlinType?,
-        primaryConstructorParameterTypes: List<KotlinType>
-    ): Boolean {
-        return when (name) {
+        primaryConstructorParameterTypes: List<KotlinType>,
+    ): Boolean =
+        when (name) {
             !in DEFAULT_FUNCTION_NAMES -> false
             "copy" -> {
                 if (classType != null) {
@@ -158,7 +156,6 @@ class UseDataClass(config: Config = Config.empty) : Rule(config) {
             }
             else -> true
         }
-    }
 
     companion object {
         private val DEFAULT_FUNCTION_NAMES = hashSetOf("hashCode", "equals", "toString", "copy")

@@ -1,101 +1,154 @@
 package io.gitlab.arturbosch.detekt.rules.coroutines
 
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.rules.setupKotlinEnvironment
-import io.gitlab.arturbosch.detekt.test.compileAndLintWithContext
+import io.gitlab.arturbosch.detekt.rules.KotlinCoreEnvironmentTest
+import io.gitlab.arturbosch.detekt.test.lintWithContext
 import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Test
 
-object RedundantSuspendModifierSpec : Spek({
-    setupKotlinEnvironment()
+@KotlinCoreEnvironmentTest
+class RedundantSuspendModifierSpec(val env: KotlinCoreEnvironment) {
 
-    val env: KotlinCoreEnvironment by memoized()
-    val subject by memoized { RedundantSuspendModifier(Config.empty) }
+    private val subject = RedundantSuspendModifier(Config.empty)
 
-    describe("RedundantSuspendModifier") {
-
-        it("reports when public function returns expression of platform type") {
-            val code = """
-                import kotlin.coroutines.Continuation
-                import kotlin.coroutines.resume
-                import kotlin.coroutines.suspendCoroutine
-
-                suspend fun suspendCoroutine() = suspendCoroutine { continuation: Continuation<String> ->
-                    continuation.resume("string")
+    @Test
+    fun `reports when public function returns expression of platform type`() {
+        val code = """
+            import kotlin.coroutines.Continuation
+            import kotlin.coroutines.resume
+            import kotlin.coroutines.suspendCoroutine
+            
+            suspend fun suspendCoroutine() = suspendCoroutine { continuation: Continuation<String> ->
+                continuation.resume("string")
+            }
+            
+            class RedundantSuspend {
+                suspend fun redundantSuspend() {
+                    println("hello world")
                 }
-
-                class RedundantSuspend {
-                    suspend fun redundantSuspend() {
-                        println("hello world")
-                    }
-                }
-                """
-            assertThat(subject.compileAndLintWithContext(env, code)).hasSize(1)
-        }
-
-        it("does not report when private") {
-            val code = """
-                import kotlin.coroutines.Continuation
-                import kotlin.coroutines.resume
-                import kotlin.coroutines.suspendCoroutine
-
-                suspend fun suspendCoroutine() = suspendCoroutine { continuation: Continuation<String> ->
-                    continuation.resume("string")
-                }
-
-                suspend fun doesSuspend() {
-                    suspendCoroutine()
-                }
-                """
-            assertThat(subject.compileAndLintWithContext(env, code)).isEmpty()
-        }
-
-        it("does not report when public function returns expression of platform type") {
-            val code = """
-                class RedundantClass {
-                    open suspend fun redundantSuspend() {
-                        println("hello world")
-                    }
-                }
-                """
-            assertThat(subject.compileAndLintWithContext(env, code)).isEmpty()
-        }
-
-        it("ignores when iterator is suspending") {
-            val code = """
-                class SuspendingIterator {
-                    suspend operator fun iterator(): Iterator<Any> = iterator { yield("value") }
-                }
-
-                suspend fun bar() {
-                    for (x in SuspendingIterator()) {
-                        println(x)
-                    }
-                }
-                """
-            assertThat(subject.compileAndLintWithContext(env, code)).isEmpty()
-        }
-
-        it("ignores when suspending function used in property delegate") {
-            val code = """
-                class SuspendingIterator {
-                    suspend operator fun iterator(): Iterator<Any> = iterator { yield("value") }
-                }
-
-                fun coroutine(block: suspend () -> Unit) {}
-
-                suspend fun bar() {
-                    val lazyValue: String by lazy {
-                        coroutine {
-                            SuspendingIterator().iterator()
-                        }
-                        "Hello"
-                    }
-                }
-                """
-            assertThat(subject.compileAndLintWithContext(env, code)).isEmpty()
-        }
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).hasSize(1)
     }
-})
+
+    @Test
+    fun `does not report when private`() {
+        val code = """
+            import kotlin.coroutines.Continuation
+            import kotlin.coroutines.resume
+            import kotlin.coroutines.suspendCoroutine
+            
+            suspend fun suspendCoroutine() = suspendCoroutine { continuation: Continuation<String> ->
+                continuation.resume("string")
+            }
+            
+            suspend fun doesSuspend() {
+                suspendCoroutine()
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `does not report when public function returns expression of platform type`() {
+        val code = """
+            class RedundantClass {
+                open suspend fun redundantSuspend() {
+                    println("hello world")
+                }
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `does not report suspend function without body`() {
+        val code = """
+            interface SuspendInterface {
+                suspend fun empty()
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `does not report overridden suspend function`() {
+        val code = """
+            interface SuspendInterface {
+                suspend fun empty()
+            }
+            
+            class SuspendClass : SuspendInterface {
+                override suspend fun empty() {
+                    println("hello world")
+                }
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `does not report actual suspend function`() {
+        val code = """
+            expect class Foo {
+                suspend fun bar()
+            }
+            
+            actual class Foo {
+                actual suspend fun bar() {}
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code, compile = false)).isEmpty()
+    }
+
+    @Test
+    fun `ignores when iterator is suspending`() {
+        val code = """
+            class SuspendingIterator {
+                suspend operator fun iterator(): Iterator<Any> = iterator { yield("value") }
+            }
+            
+            suspend fun bar() {
+                for (x in SuspendingIterator()) {
+                    println(x)
+                }
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `ignores when suspending function used in property delegate`() {
+        val code = """
+            class SuspendingIterator {
+                suspend operator fun iterator(): Iterator<Any> = iterator { yield("value") }
+            }
+            
+            fun coroutine(block: suspend () -> Unit) {}
+            
+            suspend fun bar() {
+                val lazyValue: String by lazy {
+                    coroutine {
+                        SuspendingIterator().iterator()
+                    }
+                    "Hello"
+                }
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `does not report when suspend function is called in extension method`() {
+        val code = """
+            import kotlinx.coroutines.delay
+            suspend fun foo() { delay(1000) }
+            suspend fun String.bar() {
+                foo()
+            }
+            suspend fun  String.baz() = foo()
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+}

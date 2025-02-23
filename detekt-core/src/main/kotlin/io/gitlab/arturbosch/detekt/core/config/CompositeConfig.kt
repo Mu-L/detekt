@@ -2,15 +2,26 @@ package io.gitlab.arturbosch.detekt.core.config
 
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.Notification
+import io.gitlab.arturbosch.detekt.core.config.validation.ValidatableConfiguration
+import io.gitlab.arturbosch.detekt.core.config.validation.validateConfig
+import io.gitlab.arturbosch.detekt.core.util.indentCompat
 
 /**
  * Wraps two different configuration which should be considered when retrieving properties.
  */
-class CompositeConfig(private val lookFirst: Config, private val lookSecond: Config) :
-    Config, ValidatableConfiguration {
+class CompositeConfig(
+    private val lookFirst: Config,
+    private val lookSecond: Config,
+    override val parent: Config? = null,
+) : Config, ValidatableConfiguration {
+
+    override val parentPath: String?
+        get() = lookFirst.parentPath ?: lookSecond.parentPath
 
     override fun subConfig(key: String): Config =
-        CompositeConfig(lookFirst.subConfig(key), lookSecond.subConfig(key))
+        CompositeConfig(lookFirst.subConfig(key), lookSecond.subConfig(key), this)
+
+    override fun subConfigKeys(): Set<String> = lookFirst.subConfigKeys() + lookSecond.subConfigKeys()
 
     override fun <T : Any> valueOrDefault(key: String, default: T): T {
         if (lookFirst.valueOrNull<T>(key) != null) {
@@ -22,7 +33,13 @@ class CompositeConfig(private val lookFirst: Config, private val lookSecond: Con
     override fun <T : Any> valueOrNull(key: String): T? =
         lookFirst.valueOrNull(key) ?: lookSecond.valueOrNull(key)
 
-    override fun toString(): String = "CompositeConfig(lookFirst=$lookFirst, lookSecond=$lookSecond)"
+    @Suppress("MagicNumber")
+    override fun toString() = """
+        CompositeConfig(
+            lookFirst=${lookFirst.toString().indentCompat(12).trim()},
+            lookSecond=${lookSecond.toString().indentCompat(12).trim()},
+        )
+    """.trimIndent()
 
     /**
      * Validates both sides of the composite config according to defined properties of the baseline config.

@@ -1,15 +1,21 @@
 package io.gitlab.arturbosch.detekt.test
 
 import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.api.ValueWithReason
 import io.gitlab.arturbosch.detekt.core.config.tryParseBasedOnDefault
 import io.gitlab.arturbosch.detekt.core.config.valueOrDefaultInternal
 
 @Suppress("UNCHECKED_CAST")
-open class TestConfig(
-    private val values: Map<String, Any> = mutableMapOf()
-) : Config {
+class TestConfig(override val parent: Config?, vararg pairs: Pair<String, Any>) : Config {
+    private val values: Map<String, Any> = mapOf(*pairs)
 
-    override fun subConfig(key: String) = this
+    override val parentPath: String? = null
+
+    constructor(vararg pairs: Pair<String, Any>) : this(Config.empty, *pairs)
+
+    override fun subConfig(key: String) = TestConfig(this, *values.map { (key, value) -> key to value }.toTypedArray())
+
+    override fun subConfigKeys(): Set<String> = values.keys
 
     override fun <T : Any> valueOrDefault(key: String, default: T) =
         if (key == Config.ACTIVE_KEY) {
@@ -28,8 +34,11 @@ open class TestConfig(
     }
 
     override fun <T : Any> valueOrNull(key: String): T? =
-        if (key == Config.ACTIVE_KEY) (values[Config.ACTIVE_KEY] ?: true) as T?
-        else values[key] as? T
+        if (key == Config.ACTIVE_KEY) {
+            (values[Config.ACTIVE_KEY] ?: true) as T?
+        } else {
+            values[key] as? T
+        }
 
     private fun tryParseBasedOnDefaultRespectingCollections(result: String, defaultResult: Any): Any =
         when (defaultResult) {
@@ -38,7 +47,7 @@ open class TestConfig(
             else -> tryParseBasedOnDefault(result, defaultResult)
         }
 
-    protected fun parseList(result: String): List<String> {
+    private fun parseList(result: String): List<String> {
         if (result.startsWith('[') && result.endsWith(']')) {
             val str = result.substring(1, result.length - 1)
             return str.splitToSequence(',')
@@ -48,8 +57,6 @@ open class TestConfig(
         }
         throw ClassCastException()
     }
-
-    companion object {
-        operator fun invoke(vararg pairs: Pair<String, Any>) = TestConfig(mapOf(*pairs))
-    }
 }
+
+fun ValueWithReason.toConfig(): Map<String, String?> = mapOf("value" to value, "reason" to reason)

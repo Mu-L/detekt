@@ -1,27 +1,42 @@
 package io.gitlab.arturbosch.detekt
 
 import io.gitlab.arturbosch.detekt.invoke.AllRulesArgument
+import io.gitlab.arturbosch.detekt.invoke.ApiVersionArgument
 import io.gitlab.arturbosch.detekt.invoke.AutoCorrectArgument
 import io.gitlab.arturbosch.detekt.invoke.BasePathArgument
 import io.gitlab.arturbosch.detekt.invoke.BaselineArgument
 import io.gitlab.arturbosch.detekt.invoke.BuildUponDefaultConfigArgument
 import io.gitlab.arturbosch.detekt.invoke.ClasspathArgument
+import io.gitlab.arturbosch.detekt.invoke.CliArgument
 import io.gitlab.arturbosch.detekt.invoke.ConfigArgument
 import io.gitlab.arturbosch.detekt.invoke.CreateBaselineArgument
 import io.gitlab.arturbosch.detekt.invoke.DebugArgument
 import io.gitlab.arturbosch.detekt.invoke.DetektInvoker
+import io.gitlab.arturbosch.detekt.invoke.DetektWorkAction
 import io.gitlab.arturbosch.detekt.invoke.DisableDefaultRuleSetArgument
-import io.gitlab.arturbosch.detekt.invoke.FailFastArgument
+import io.gitlab.arturbosch.detekt.invoke.ExplicitApiArgument
+import io.gitlab.arturbosch.detekt.invoke.FreeArgs
+import io.gitlab.arturbosch.detekt.invoke.FriendPathArgs
 import io.gitlab.arturbosch.detekt.invoke.InputArgument
+import io.gitlab.arturbosch.detekt.invoke.JdkHomeArgument
 import io.gitlab.arturbosch.detekt.invoke.JvmTargetArgument
+import io.gitlab.arturbosch.detekt.invoke.LanguageVersionArgument
+import io.gitlab.arturbosch.detekt.invoke.MultiPlatformEnabledArgument
+import io.gitlab.arturbosch.detekt.invoke.NoJdkArgument
+import io.gitlab.arturbosch.detekt.invoke.OptInArguments
 import io.gitlab.arturbosch.detekt.invoke.ParallelArgument
-import io.gitlab.arturbosch.detekt.invoke.isDryRunEnabled
+import org.gradle.api.Incubating
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileTree
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.Console
+import org.gradle.api.tasks.IgnoreEmptyDirectories
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
@@ -29,12 +44,18 @@ import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.SkipWhenEmpty
 import org.gradle.api.tasks.SourceTask
 import org.gradle.api.tasks.TaskAction
 import org.gradle.language.base.plugins.LifecycleBasePlugin
+import org.gradle.workers.WorkerExecutor
+import javax.inject.Inject
 
 @CacheableTask
-open class DetektCreateBaselineTask : SourceTask() {
+abstract class DetektCreateBaselineTask @Inject constructor(
+    private val workerExecutor: WorkerExecutor,
+    private val providers: ProviderFactory,
+) : SourceTask() {
 
     init {
         description = "Creates a detekt baseline on the given --baseline path."
@@ -42,103 +63,146 @@ open class DetektCreateBaselineTask : SourceTask() {
     }
 
     @get:OutputFile
-    val baseline: RegularFileProperty = project.objects.fileProperty()
+    abstract val baseline: RegularFileProperty
 
     @get:InputFiles
     @get:Optional
-    @PathSensitive(PathSensitivity.RELATIVE)
-    val config: ConfigurableFileCollection = project.objects.fileCollection()
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val config: ConfigurableFileCollection
 
     @get:Classpath
-    val detektClasspath: ConfigurableFileCollection = project.objects.fileCollection()
+    abstract val detektClasspath: ConfigurableFileCollection
 
     @get:Classpath
-    val pluginClasspath: ConfigurableFileCollection = project.objects.fileCollection()
+    abstract val pluginClasspath: ConfigurableFileCollection
 
     @get:Classpath
     @get:Optional
-    val classpath: ConfigurableFileCollection = project.objects.fileCollection()
-
-    @get:Console
-    val debug: Property<Boolean> = project.objects.property(Boolean::class.javaObjectType)
+    abstract val classpath: ConfigurableFileCollection
 
     @get:Internal
-    val parallel: Property<Boolean> = project.objects.property(Boolean::class.javaObjectType)
+    abstract val friendPaths: ConfigurableFileCollection
+
+    @get:Console
+    abstract val debug: Property<Boolean>
+
+    @get:Internal
+    abstract val parallel: Property<Boolean>
 
     @get:Input
     @get:Optional
-    val disableDefaultRuleSets: Property<Boolean> = project.objects.property(Boolean::class.javaObjectType)
+    abstract val disableDefaultRuleSets: Property<Boolean>
 
     @get:Input
     @get:Optional
-    val buildUponDefaultConfig: Property<Boolean> = project.objects.property(Boolean::class.javaObjectType)
+    abstract val buildUponDefaultConfig: Property<Boolean>
 
     @get:Input
     @get:Optional
-    @Deprecated("Please use the buildUponDefaultConfig and allRules flags instead.", ReplaceWith("allRules"))
-    val failFast: Property<Boolean> = project.objects.property(Boolean::class.javaObjectType)
+    abstract val ignoreFailures: Property<Boolean>
 
     @get:Input
     @get:Optional
-    val ignoreFailures: Property<Boolean> = project.objects.property(Boolean::class.javaObjectType)
+    abstract val allRules: Property<Boolean>
+
+    @get:Input
+    abstract val optIn: ListProperty<String>
+
+    @get:Input
+    abstract val noJdk: Property<Boolean>
+
+    @get:Input
+    abstract val multiPlatformEnabled: Property<Boolean>
 
     @get:Input
     @get:Optional
-    val allRules: Property<Boolean> = project.objects.property(Boolean::class.javaObjectType)
-
-    @get:Input
-    @get:Optional
-    val autoCorrect: Property<Boolean> = project.objects.property(Boolean::class.javaObjectType)
+    abstract val autoCorrect: Property<Boolean>
 
     /**
      * Respect only the file path for incremental build. Using @InputFile respects both file path and content.
      */
     @get:Input
     @get:Optional
-    internal val basePathProp: Property<String> = project.objects.property(String::class.java)
-    var basePath: String
-        @Internal
-        get() = basePathProp.get()
-        set(value) = basePathProp.set(value)
+    abstract val basePath: Property<String>
 
     @get:Input
     @get:Optional
-    internal val jvmTargetProp: Property<String> = project.objects.property(String::class.javaObjectType)
-    var jvmTarget: String
-        @Internal
-        get() = jvmTargetProp.get()
-        set(value) = jvmTargetProp.set(value)
+    abstract val jvmTarget: Property<String>
 
-    private val isDryRun: Boolean = project.isDryRunEnabled()
+    @get:Input
+    @get:Optional
+    abstract val apiVersion: Property<String>
 
-    @TaskAction
-    fun baseline() {
-        if (@Suppress("DEPRECATION") failFast.getOrElse(false)) {
-            logger.warn("'failFast' is deprecated. Please use 'buildUponDefaultConfig' together with 'allRules'.")
-        }
+    @get:Input
+    @get:Optional
+    abstract val languageVersion: Property<String>
 
-        val arguments = mutableListOf(
+    @get:Internal
+    abstract val jdkHome: DirectoryProperty
+
+    @get:Input
+    @get:Incubating
+    abstract val freeCompilerArgs: ListProperty<String>
+
+    @get:Input
+    @get:Optional
+    internal abstract val explicitApi: Property<String>
+
+    @get:Internal
+    internal val arguments
+        get() = listOf(
             CreateBaselineArgument,
             ClasspathArgument(classpath),
-            JvmTargetArgument(jvmTargetProp.orNull),
+            ApiVersionArgument(apiVersion.orNull),
+            LanguageVersionArgument(languageVersion.orNull),
+            JvmTargetArgument(jvmTarget.orNull),
+            JdkHomeArgument(jdkHome),
             BaselineArgument(baseline.get()),
             InputArgument(source),
             ConfigArgument(config),
-            DebugArgument(debug.getOrElse(false)),
-            ParallelArgument(parallel.getOrElse(false)),
-            BuildUponDefaultConfigArgument(buildUponDefaultConfig.getOrElse(false)),
-            FailFastArgument(@Suppress("DEPRECATION") failFast.getOrElse(false)),
-            AutoCorrectArgument(autoCorrect.getOrElse(false)),
-            AllRulesArgument(allRules.getOrElse(false)),
-            BasePathArgument(basePathProp.orNull),
-            DisableDefaultRuleSetArgument(disableDefaultRuleSets.getOrElse(false))
-        )
+            DebugArgument(debug.get()),
+            ParallelArgument(parallel.get()),
+            BuildUponDefaultConfigArgument(buildUponDefaultConfig.get()),
+            AutoCorrectArgument(autoCorrect.get()),
+            AllRulesArgument(allRules.get()),
+            BasePathArgument(basePath.orNull),
+            DisableDefaultRuleSetArgument(disableDefaultRuleSets.get()),
+            FreeArgs(freeCompilerArgs.get()),
+            OptInArguments(optIn.get()),
+            FriendPathArgs(friendPaths),
+            NoJdkArgument(noJdk.get()),
+            ExplicitApiArgument(explicitApi.orNull),
+            MultiPlatformEnabledArgument(multiPlatformEnabled.get()),
+        ).flatMap(CliArgument::toArgument)
+            .plus("-no-stdlib")
+            .plus("-no-reflect")
 
-        DetektInvoker.create(task = this, isDryRun = isDryRun).invokeCli(
-            arguments = arguments.toList(),
-            ignoreFailures = ignoreFailures.getOrElse(false),
-            classpath = detektClasspath.plus(pluginClasspath),
-            taskName = name
-        )
+    @InputFiles
+    @SkipWhenEmpty
+    @IgnoreEmptyDirectories
+    @PathSensitive(PathSensitivity.RELATIVE)
+    override fun getSource(): FileTree = super.getSource()
+
+    @TaskAction
+    fun baseline() {
+        if (providers.isWorkerApiEnabled()) {
+            logger.info("Executing $name using Worker API")
+            val workQueue = workerExecutor.processIsolation()
+
+            workQueue.submit(DetektWorkAction::class.java) { workParameters ->
+                workParameters.arguments.set(arguments)
+                workParameters.classpath.setFrom(detektClasspath, pluginClasspath)
+                workParameters.ignoreFailures.set(ignoreFailures)
+                workParameters.taskName.set(name)
+            }
+        } else {
+            logger.info("Executing $name using DetektInvoker")
+            DetektInvoker.create().invokeCli(
+                arguments = arguments,
+                ignoreFailures = ignoreFailures.get(),
+                classpath = detektClasspath.plus(pluginClasspath).files,
+                taskName = name
+            )
+        }
     }
 }
