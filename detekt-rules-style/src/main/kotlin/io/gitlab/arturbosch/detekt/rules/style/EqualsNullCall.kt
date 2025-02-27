@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import org.jetbrains.kotlin.psi.KtCallExpression
 
 /**
@@ -23,18 +20,14 @@ import org.jetbrains.kotlin.psi.KtCallExpression
  * </compliant>
  */
 @ActiveByDefault(since = "1.2.0")
-class EqualsNullCall(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "EqualsNullCall",
-        Severity.Style,
-        "Equals() method is called with null as parameter. Consider using == to compare to null.",
-        Debt.FIVE_MINS
-    )
+class EqualsNullCall(config: Config) : Rule(
+    config,
+    "Equals() method is called with null as parameter. Consider using == to compare to null."
+) {
 
     override fun visitCallExpression(expression: KtCallExpression) {
         if (expression.calleeExpression?.text == "equals" && hasNullParameter(expression)) {
-            report(CodeSmell(issue, Entity.from(expression), issue.description))
+            report(Finding(Entity.from(expression), description))
         } else {
             super.visitCallExpression(expression)
         }

@@ -1,11 +1,20 @@
 plugins {
     id("module")
-    alias(libs.plugins.binaryCompatibilityValidator)
+    id("public-api")
 }
 
 dependencies {
-    implementation(libs.kotlin.compilerEmbeddable)
+    api(libs.kotlin.compilerEmbeddable)
 
-    testImplementation(libs.bundles.testImplementation)
-    testRuntimeOnly(libs.spek.runner)
+    testImplementation(libs.assertj.core)
+    testImplementation(projects.detektTest)
+    testImplementation(projects.detektTestUtils)
+}
+
+detekt {
+    config.from("config/detekt.yml")
+}
+
+apiValidation {
+    ignoredPackages.add("io.github.detekt.psi.internal")
 }

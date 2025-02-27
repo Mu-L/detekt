@@ -1,40 +1,88 @@
 package io.gitlab.arturbosch.detekt.rules.complexity
 
-import io.github.detekt.test.utils.resourceAsPath
 import io.gitlab.arturbosch.detekt.api.SourceLocation
 import io.gitlab.arturbosch.detekt.test.TestConfig
 import io.gitlab.arturbosch.detekt.test.assertThat
-import io.gitlab.arturbosch.detekt.test.compileAndLint
 import io.gitlab.arturbosch.detekt.test.lint
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Test
 
-private fun subject(threshold: Int) = LargeClass(TestConfig(mapOf("threshold" to threshold)))
+private fun subject(allowedLines: Int) = LargeClass(TestConfig("allowedLines" to allowedLines))
 
-class LargeClassSpec : Spek({
+class LargeClassSpec {
 
-    describe("nested classes are also considered") {
-
-        it("should detect only the nested large class which exceeds threshold 70") {
-            val findings = subject(threshold = 70).lint(resourceAsPath("NestedClasses.kt"))
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasSourceLocations(SourceLocation(12, 15))
-        }
+    @Test
+    fun `should detect only the nested large class which exceeds the allowed lines`() {
+        val code = """
+            class NestedClasses {
+            
+                private val i = 0
+            
+                class InnerClass {
+            
+                    class NestedInnerClass {
+            
+                        fun nestedMethod() {
+                            fun nestedLocalMethod() {
+                                println()
+                            }
+                            nestedLocalMethod()
+                        }
+                    }
+                }
+            }
+            
+            /**
+             * Top level members must be skipped for LargeClass rule
+             */
+            val aTopLevelPropertyOfNestedClasses = 0
+        """.trimIndent()
+        val findings = subject(allowedLines = 4).lint(code)
+        assertThat(findings).hasSize(1)
+        assertThat(findings).hasStartSourceLocations(SourceLocation(7, 15))
     }
 
-    describe("files without classes should not be considered") {
+    @Test
+    fun `should not report anything in files without classes`() {
+        val code = """
+            val i = 0
+            
+            fun f() {
+                println()
+                println()
+            }
+        """.trimIndent()
+        val rule = subject(allowedLines = 2)
+        assertThat(rule.lint(code)).isEmpty()
+    }
 
-        it("should not report anything in files without classes") {
-            val code = """
-                val i = 0 
-
+    @Test
+    fun `should not report a class that has exactly the allowed lines`() {
+        val code = """
+            class MyClass {
                 fun f() {
                     println()
                     println()
                 }
-            """
-            val rule = subject(threshold = 2)
-            assertThat(rule.compileAndLint(code)).isEmpty()
-        }
+            }
+        """.trimIndent()
+
+        val rule = subject(allowedLines = 6)
+
+        assertThat(rule.lint(code)).isEmpty()
     }
-})
+
+    @Test
+    fun `should not report a class that has less than the allowed lines`() {
+        val code = """
+            class MyClass {
+                fun f() {
+                    println()
+                }
+            }
+        """.trimIndent()
+
+        val rule = subject(allowedLines = 6)
+
+        assertThat(rule.lint(code)).isEmpty()
+    }
+}

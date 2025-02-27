@@ -1,15 +1,12 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import org.jetbrains.kotlin.psi.KtThrowExpression
 import org.jetbrains.kotlin.psi.psiUtil.referenceExpression
 
@@ -36,14 +33,10 @@ import org.jetbrains.kotlin.psi.psiUtil.referenceExpression
  * </compliant>
  */
 @ActiveByDefault(since = "1.0.0")
-class TooGenericExceptionThrown(config: Config) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Defect,
-        "Thrown exception is too generic. Prefer throwing project specific exceptions to handle error cases.",
-        Debt.TWENTY_MINS
-    )
+class TooGenericExceptionThrown(config: Config) : Rule(
+    config,
+    "The thrown exception is too generic. Prefer throwing project specific exceptions to handle error cases."
+) {
 
     @Configuration("exceptions which are too generic and should not be thrown")
     private val exceptionNames: Set<String> by config(
@@ -59,8 +52,7 @@ class TooGenericExceptionThrown(config: Config) : Rule(config) {
         expression.thrownExpression?.referenceExpression()?.text?.let {
             if (it in exceptionNames) {
                 report(
-                    CodeSmell(
-                        issue,
+                    Finding(
                         Entity.from(expression),
                         "$it is a too generic Exception. " +
                             "Prefer throwing specific exceptions that indicate a specific error case."

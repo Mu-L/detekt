@@ -1,28 +1,27 @@
 package io.gitlab.arturbosch.detekt.internal
 
-import org.gradle.api.file.FileCollection
+import java.io.File
 import java.net.URLClassLoader
 import java.util.concurrent.ConcurrentHashMap
 
-fun interface ClassLoaderCache {
+internal fun interface ClassLoaderCache {
 
-    fun getOrCreate(classpath: FileCollection): URLClassLoader
+    fun getOrCreate(classpath: Set<File>): URLClassLoader
 }
 
 internal class DefaultClassLoaderCache : ClassLoaderCache {
 
     private val classpathFilesHashWithLoaders = ConcurrentHashMap<Int, URLClassLoader>()
 
-    override fun getOrCreate(classpath: FileCollection): URLClassLoader {
-        val classpathFiles = classpath.files
-        val classpathHashCode = HashSet(classpathFiles).hashCode()
+    override fun getOrCreate(classpath: Set<File>): URLClassLoader {
+        val classpathHashCode = HashSet(classpath).hashCode()
         return classpathFilesHashWithLoaders.getOrPut(classpathHashCode) {
             URLClassLoader(
-                classpathFiles.map { it.toURI().toURL() }.toTypedArray(),
-                null /* isolate detekt environment */
+                classpath.map { it.toURI().toURL() }.toTypedArray(),
+                null // isolate detekt environment
             )
         }
     }
 }
 
-object GlobalClassLoaderCache : ClassLoaderCache by DefaultClassLoaderCache()
+internal object GlobalClassLoaderCache : ClassLoaderCache by DefaultClassLoaderCache()

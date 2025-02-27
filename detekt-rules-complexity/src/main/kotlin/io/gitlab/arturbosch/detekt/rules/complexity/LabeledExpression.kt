@@ -1,14 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.complexity
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtExpressionWithLabel
@@ -59,14 +56,10 @@ import org.jetbrains.kotlin.psi.psiUtil.isExtensionDeclaration
  * }
  * </compliant>
  */
-class LabeledExpression(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        "LabeledExpression",
-        Severity.Maintainability,
-        "Expression with labels increase complexity and affect maintainability.",
-        Debt.TWENTY_MINS
-    )
+class LabeledExpression(config: Config) : Rule(
+    config,
+    "Expression with labels increase complexity and affect maintainability."
+) {
 
     @Configuration("allows to provide a list of label names which should be ignored by this rule")
     private val ignoredLabels: List<String> by config(emptyList<String>()) { list ->
@@ -76,10 +69,10 @@ class LabeledExpression(config: Config = Config.empty) : Rule(config) {
     override fun visitExpressionWithLabel(expression: KtExpressionWithLabel) {
         super.visitExpressionWithLabel(expression)
         if (expression !is KtThisExpression || isNotReferencingOuterClass(expression)) {
-            expression.getLabelName()?.let { labelName ->
-                if (ignoredLabels.none { labelName.contains(it, ignoreCase = true) }) {
-                    report(CodeSmell(issue, Entity.from(expression), issue.description))
-                }
+            val label = expression.getTargetLabel()
+            val labelName = label?.getReferencedName()
+            if (labelName != null && ignoredLabels.none { labelName.contains(it, ignoreCase = true) }) {
+                report(Finding(Entity.from(label), description))
             }
         }
     }
@@ -94,10 +87,9 @@ class LabeledExpression(config: Config = Config.empty) : Rule(config) {
         return !containingClasses.any { it.name == expression.getLabelName() }
     }
 
-    private fun isAllowedToReferenceContainingClass(klass: KtClass, expression: KtExpressionWithLabel): Boolean {
-        return !klass.isInner() ||
+    private fun isAllowedToReferenceContainingClass(klass: KtClass, expression: KtExpressionWithLabel): Boolean =
+        !klass.isInner() ||
             expression.getStrictParentOfType<KtNamedFunction>()?.isExtensionDeclaration() == true
-    }
 
     private fun getClassHierarchy(element: KtElement, classes: MutableList<KtClass>) {
         val containingClass = element.containingClass() ?: return

@@ -1,15 +1,8 @@
 plugins {
-    `java-library`
-    `maven-publish`
-    signing
+    id("java-library")
+    id("maven-publish")
+    id("signing")
 }
-
-val sonatypeUsername: String? = findProperty("sonatypeUsername")
-    ?.toString()
-    ?: System.getenv("MAVEN_CENTRAL_USER")
-val sonatypePassword: String? = findProperty("sonatypePassword")
-    ?.toString()
-    ?: System.getenv("MAVEN_CENTRAL_PW")
 
 publishing {
     repositories {
@@ -17,53 +10,65 @@ publishing {
             name = "mavenCentral"
             url = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2")
             credentials {
-                username = sonatypeUsername
-                password = sonatypePassword
+                username = "SONATYPE_USERNAME".byProperty
+                password = "SONATYPE_PASSWORD".byProperty
             }
         }
         maven {
             name = "sonatypeSnapshot"
             url = uri("https://oss.sonatype.org/content/repositories/snapshots")
             credentials {
-                username = sonatypeUsername
-                password = sonatypePassword
+                username = "SONATYPE_USERNAME".byProperty
+                password = "SONATYPE_PASSWORD".byProperty
             }
         }
     }
-    publications.register<MavenPublication>(DETEKT_PUBLICATION) {
-        groupId = "io.gitlab.arturbosch.detekt"
+    // We don't need to configure publishing for the Gradle plugin.
+    if (project.name != "detekt-gradle-plugin") {
+        publications.register<MavenPublication>(DETEKT_PUBLICATION) {
+            from(components["java"])
+        }
+    }
+    publications.withType<MavenPublication> {
         artifactId = project.name
-        from(components["java"])
         version = Versions.currentOrSnapshot()
         pom {
-            description.set("Static code analysis for Kotlin")
-            name.set("detekt")
-            url.set("https://detekt.github.io/detekt")
+            description = "Static code analysis for Kotlin"
+            name = "detekt"
+            url = "https://detekt.dev"
             licenses {
                 license {
-                    name.set("The Apache Software License, Version 2.0")
-                    url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                    distribution.set("repo")
+                    name = "The Apache Software License, Version 2.0"
+                    url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                    distribution = "repo"
                 }
             }
             developers {
                 developer {
-                    id.set("Artur Bosch")
-                    name.set("Artur Bosch")
-                    email.set("arturbosch@gmx.de")
+                    id = "detekt Developers"
+                    name = "detekt Developers"
+                    email = "info@detekt.dev"
                 }
             }
             scm {
-                url.set("https://github.com/detekt/detekt")
+                url = "https://github.com/detekt/detekt"
             }
         }
     }
 }
 
-if (findProperty("signing.keyId") != null) {
-    signing {
-        sign(publishing.publications[DETEKT_PUBLICATION])
-    }
+val signingKey = "SIGNING_KEY".byProperty
+val signingPwd = "SIGNING_PWD".byProperty
+if (signingKey.isNullOrBlank() || signingPwd.isNullOrBlank()) {
+    logger.info("Signing disabled as the GPG key was not found")
 } else {
-    logger.info("Signing Disabled as the PGP key was not found")
+    logger.info("GPG Key found - Signing enabled")
 }
+
+signing {
+    useInMemoryPgpKeys(signingKey, signingPwd)
+    sign(publishing.publications)
+    isRequired = !(signingKey.isNullOrBlank() || signingPwd.isNullOrBlank())
+}
+
+val String.byProperty: String? get() = providers.gradleProperty(this).orNull

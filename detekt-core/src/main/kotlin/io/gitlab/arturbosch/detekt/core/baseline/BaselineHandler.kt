@@ -1,6 +1,5 @@
 package io.gitlab.arturbosch.detekt.core.baseline
 
-import io.github.detekt.tooling.internal.NotApiButProbablyUsedByUsers
 import org.xml.sax.Attributes
 import org.xml.sax.helpers.DefaultHandler
 
@@ -11,19 +10,12 @@ internal class BaselineHandler : DefaultHandler() {
     private val currentIssues = mutableSetOf<String>()
     private val manuallySuppressedIssues = mutableSetOf<String>()
 
-    internal fun createBaseline() = Baseline(manuallySuppressedIssues, currentIssues)
+    internal fun createBaseline() = DefaultBaseline(manuallySuppressedIssues, currentIssues)
 
     override fun startElement(uri: String, localName: String, qName: String, attributes: Attributes) {
         when (qName) {
-            // Blacklist and Whitelist were previous XML tags. They have been replaced by more appropriate names
-            // For the removal of these to not be a breaking change these have been implemented to be synonyms
-            // of [MANUALLY_SUPPRESSED_ISSUES] and [CURRENT_ISSUES].
-            MANUALLY_SUPPRESSED_ISSUES, BLACKLIST -> {
-                current = MANUALLY_SUPPRESSED_ISSUES
-            }
-            CURRENT_ISSUES, WHITELIST -> {
-                current = CURRENT_ISSUES
-            }
+            MANUALLY_SUPPRESSED_ISSUES -> current = MANUALLY_SUPPRESSED_ISSUES
+            CURRENT_ISSUES -> current = CURRENT_ISSUES
             ID -> content = ""
         }
     }
@@ -44,13 +36,5 @@ internal class BaselineHandler : DefaultHandler() {
 
     override fun characters(ch: CharArray, start: Int, length: Int) {
         if (current != null) content += String(ch, start, length)
-    }
-
-    companion object {
-        @NotApiButProbablyUsedByUsers
-        private const val BLACKLIST = "Blacklist"
-
-        @NotApiButProbablyUsedByUsers
-        private const val WHITELIST = "Whitelist"
     }
 }

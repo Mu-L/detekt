@@ -1,17 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.diagnostics.Errors
 import org.jetbrains.kotlin.psi.KtUnaryExpression
-import org.jetbrains.kotlin.resolve.BindingContext
 
 /**
  * Reports unnecessary not-null operator usage (!!) that can be removed by the user.
@@ -26,26 +22,21 @@ import org.jetbrains.kotlin.resolve.BindingContext
  * val b = a
  * </compliant>
  */
-@RequiresTypeResolution
 @ActiveByDefault(since = "1.16.0")
-class UnnecessaryNotNullOperator(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        "UnnecessaryNotNullOperator",
-        Severity.Defect,
-        "Unnecessary not-null unary operator (!!) detected.",
-        Debt.FIVE_MINS
-    )
+class UnnecessaryNotNullOperator(config: Config) :
+    Rule(
+        config,
+        "Unnecessary not-null unary operator (!!) detected."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitUnaryExpression(expression: KtUnaryExpression) {
         super.visitUnaryExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
 
         val compilerReports = bindingContext.diagnostics.forElement(expression.operationReference)
         if (compilerReports.any { it.factory == Errors.UNNECESSARY_NOT_NULL_ASSERTION }) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.from(expression),
                     "${expression.text} contains an unnecessary " +
                         "not-null (!!) operators"

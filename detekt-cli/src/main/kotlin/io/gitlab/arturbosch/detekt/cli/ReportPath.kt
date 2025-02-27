@@ -1,7 +1,7 @@
 package io.gitlab.arturbosch.detekt.cli
 
 import java.nio.file.Path
-import java.nio.file.Paths
+import kotlin.io.path.Path
 
 data class ReportPath(val kind: String, val path: Path) {
 
@@ -15,7 +15,7 @@ data class ReportPath(val kind: String, val path: Path) {
 
             val path = when (val partsSize = parts.size) {
                 NUM_OF_PARTS_UNIX -> parts[1]
-                NUM_OF_PARTS_WINDOWS -> parts.slice(1 until partsSize).joinToString(REPORT_PATH_SEPARATOR)
+                NUM_OF_PARTS_WINDOWS -> parts.slice(1..<partsSize).joinToString(REPORT_PATH_SEPARATOR)
                 else -> error(
                     "Input '$input' must consist of two parts for Unix OSs or three for Windows (report-id:path)."
                 )
@@ -24,7 +24,7 @@ data class ReportPath(val kind: String, val path: Path) {
             val kind = parts[0]
             require(kind.isNotEmpty()) { "The kind of report must not be empty (path - $path)" }
             require(path.isNotEmpty()) { "The path of the report must not be empty (kind - $kind)" }
-            return ReportPath(kind, Paths.get(path))
+            return ReportPath(kind, Path(path))
         }
     }
 }

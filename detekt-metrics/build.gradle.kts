@@ -4,9 +4,9 @@ plugins {
 
 dependencies {
     api(projects.detektApi)
+    compileOnly(projects.detektPsiUtils)
     testImplementation(projects.detektTestUtils)
     testImplementation(testFixtures(projects.detektApi))
-    testImplementation(libs.mockk)
-    testImplementation(libs.bundles.testImplementation)
-    testRuntimeOnly(libs.spek.runner)
+    testImplementation(libs.assertj.core)
+    testRuntimeOnly(projects.detektPsiUtils)
 }

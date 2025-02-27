@@ -1,8 +1,7 @@
 package io.gitlab.arturbosch.detekt.rules.performance
 
-import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.RuleSet
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.internal.DefaultRuleSetProvider
 
 /**
@@ -11,15 +10,17 @@ import io.gitlab.arturbosch.detekt.api.internal.DefaultRuleSetProvider
 @ActiveByDefault(since = "1.0.0")
 class PerformanceProvider : DefaultRuleSetProvider {
 
-    override val ruleSetId: String = "performance"
+    override val ruleSetId = RuleSet.Id("performance")
 
-    override fun instance(config: Config): RuleSet = RuleSet(
+    override fun instance(): RuleSet = RuleSet(
         ruleSetId,
         listOf(
-            ForEachOnRange(config),
-            SpreadOperator(config),
-            UnnecessaryTemporaryInstantiation(config),
-            ArrayPrimitive(config)
+            ::ForEachOnRange,
+            ::SpreadOperator,
+            ::UnnecessaryTemporaryInstantiation,
+            ::ArrayPrimitive,
+            ::CouldBeSequence,
+            ::UnnecessaryPartOfBinaryExpression,
         )
     )
 }

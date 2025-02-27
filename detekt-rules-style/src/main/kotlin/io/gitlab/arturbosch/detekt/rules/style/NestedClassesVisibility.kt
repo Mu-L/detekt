@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import io.gitlab.arturbosch.detekt.rules.isInternal
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtClass
@@ -37,14 +34,10 @@ import org.jetbrains.kotlin.psi.KtEnumEntry
  * </compliant>
  */
 @ActiveByDefault(since = "1.16.0")
-class NestedClassesVisibility(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        "NestedClassesVisibility",
-        Severity.Style,
-        "The explicit public modifier still results in an internal nested class.",
-        Debt.FIVE_MINS
-    )
+class NestedClassesVisibility(config: Config) : Rule(
+    config,
+    "The explicit public modifier still results in an internal nested class."
+) {
 
     override fun visitClass(klass: KtClass) {
         if (!klass.isInterface() && klass.isTopLevel() && klass.isInternal()) {
@@ -56,7 +49,7 @@ class NestedClassesVisibility(config: Config = Config.empty) : Rule(config) {
         klass.declarations
             .filterIsInstance<KtClassOrObject>()
             .filter { it.hasModifier(KtTokens.PUBLIC_KEYWORD) && it.isNoEnum() && it.isNoCompanionObj() }
-            .forEach { report(CodeSmell(issue, Entity.from(it), issue.description)) }
+            .forEach { report(Finding(Entity.from(it), description)) }
     }
 
     private fun KtClassOrObject.isNoEnum() = !this.hasModifier(KtTokens.ENUM_KEYWORD) && this !is KtEnumEntry

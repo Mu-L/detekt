@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import io.gitlab.arturbosch.detekt.rules.isEqualsFunction
 import org.jetbrains.kotlin.KtNodeTypes
 import org.jetbrains.kotlin.com.intellij.psi.PsiElement
@@ -19,7 +16,7 @@ import org.jetbrains.kotlin.psi.KtReturnExpression
 import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 
 /**
- * Reports equals() methods which will always return true or false.
+ * Reports `equals()` methods which will always return true or false.
  *
  * Equals methods should always report if some other object is equal to the current object.
  * See the Kotlin documentation for Any.equals(other: Any?):
@@ -38,23 +35,17 @@ import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
  * </compliant>
  */
 @ActiveByDefault(since = "1.2.0")
-class EqualsAlwaysReturnsTrueOrFalse(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "EqualsAlwaysReturnsTrueOrFalse",
-        Severity.Defect,
-        "Having an equals method which always returns true or false is not a good idea. " +
-            "It does not follow the contract of this method. " +
-            "Consider a good default implementation. " +
-            "For example this == other",
-        Debt.TWENTY_MINS
-    )
+class EqualsAlwaysReturnsTrueOrFalse(config: Config) : Rule(
+    config,
+    "Having an `equals()` method that always returns true or false is not a good idea. " +
+        "It does not follow the contract of this method. " +
+        "Consider a good default implementation (e.g. `this == other`)."
+) {
 
     override fun visitNamedFunction(function: KtNamedFunction) {
         if (function.isEqualsFunction() && function.returnsBooleanConstant()) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.atName(function),
                     "This equals function always returns the same " +
                         "result regardless of the input parameters."

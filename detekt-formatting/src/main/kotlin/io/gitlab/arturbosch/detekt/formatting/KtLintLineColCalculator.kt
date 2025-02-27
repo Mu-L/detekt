@@ -9,21 +9,17 @@ package io.gitlab.arturbosch.detekt.formatting
 object KtLintLineColCalculator {
     private const val UTF8_BOM = "\uFEFF"
 
-    fun normalizeText(text: String): String {
-        return text
+    fun calculateLineColByOffset(text: String): (offset: Int) -> Pair<Int, Int> =
+        buildPositionInTextLocator(normalizeText(text))
+
+    private fun normalizeText(text: String): String =
+        text
             .replace("\r\n", "\n")
             .replace("\r", "\n")
             .replaceFirst(UTF8_BOM, "")
-    }
-
-    fun calculateLineColByOffset(
-        text: String
-    ): (offset: Int) -> Pair<Int, Int> {
-        return buildPositionInTextLocator(text)
-    }
 
     private fun buildPositionInTextLocator(
-        text: String
+        text: String,
     ): (offset: Int) -> Pair<Int, Int> {
         val textLength = text.length
         val arr = ArrayList<Int>()
@@ -50,7 +46,7 @@ object KtLintLineColCalculator {
     }
 
     private class SegmentTree(
-        sortedArray: IntArray
+        sortedArray: IntArray,
     ) {
 
         init {
@@ -73,7 +69,7 @@ object KtLintLineColCalculator {
         private fun binarySearch(
             v: Int,
             l: Int,
-            r: Int
+            r: Int,
         ): Int = when {
             l > r -> -1
             else -> {
@@ -90,6 +86,6 @@ object KtLintLineColCalculator {
 
     private data class Segment(
         val left: Int,
-        val right: Int
+        val right: Int,
     )
 }

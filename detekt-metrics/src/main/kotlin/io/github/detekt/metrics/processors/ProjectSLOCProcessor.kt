@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.psi.KtFile
 
 class ProjectSLOCProcessor : AbstractProcessor() {
 
+    override val id: String = "ProjectSLOCProcessor"
     override val visitor: DetektVisitor = SLOCVisitor()
     override val key: Key<Int> = sourceLinesKey
 }
@@ -22,11 +23,10 @@ class SLOCVisitor : DetektVisitor() {
 
         private val comments = arrayOf("//", "/*", "*/", "*")
 
-        fun count(lines: List<String>): Int {
-            return lines
+        fun count(lines: List<String>): Int =
+            lines
                 .map { it.trim() }
                 .count { trim -> trim.isNotEmpty() && !comments.any { trim.startsWith(it) } }
-        }
     }
 }
 

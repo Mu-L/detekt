@@ -1,74 +1,94 @@
 package io.gitlab.arturbosch.detekt.test
 
-import io.github.detekt.psi.FilePath
-import io.gitlab.arturbosch.detekt.api.CodeSmell
-import io.gitlab.arturbosch.detekt.api.CorrectableCodeSmell
-import io.gitlab.arturbosch.detekt.api.Debt
-import io.gitlab.arturbosch.detekt.api.Entity
 import io.gitlab.arturbosch.detekt.api.Issue
-import io.gitlab.arturbosch.detekt.api.Location
+import io.gitlab.arturbosch.detekt.api.RuleInstance
+import io.gitlab.arturbosch.detekt.api.RuleSet
 import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.SourceLocation
 import io.gitlab.arturbosch.detekt.api.TextLocation
-import org.jetbrains.kotlin.psi.KtElement
-import java.nio.file.Paths
+import java.net.URI
+import kotlin.io.path.Path
 
-fun createFinding(ruleName: String = "TestSmell", fileName: String = "TestFile.kt") =
-    CodeSmell(createIssue(ruleName), createEntity(fileName), "TestMessage")
-
-fun createCorrectableFinding(ruleName: String = "TestSmell", fileName: String = "TestFile.kt") =
-    CorrectableCodeSmell(createIssue(ruleName), createEntity(fileName), "TestMessage", autoCorrectEnabled = true)
-
-fun createFinding(
-    issue: Issue,
-    entity: Entity,
-    message: String = entity.signature,
-) = CodeSmell(
-    issue = issue,
+fun createIssue(
+    ruleId: String = "TestSmell/id",
+    entity: Issue.Entity = createEntity(),
+    message: String = "TestMessage",
+    severity: Severity = Severity.Error,
+    suppressReasons: List<String> = emptyList(),
+): Issue = createIssue(
+    ruleInstance = createRuleInstance(ruleId),
     entity = entity,
-    message = message
+    message = message,
+    severity = severity,
+    suppressReasons = suppressReasons,
 )
 
-fun createFindingForRelativePath(
-    ruleName: String = "TestSmell",
-    basePath: String = "/Users/tester/detekt/",
-    relativePath: String = "TestFile.kt"
-) = CodeSmell(
-    issue = createIssue(ruleName),
-    entity = Entity(
-        name = "TestEntity",
-        signature = "TestEntitySignature",
-        location = Location(
-            source = SourceLocation(1, 1),
-            text = TextLocation(0, 0),
-            filePath = FilePath.fromRelative(Paths.get(basePath), Paths.get(relativePath))
-        ),
-        ktElement = null
-    ),
-    message = "TestMessage"
+fun createIssue(
+    ruleInstance: RuleInstance,
+    entity: Issue.Entity = createEntity(),
+    message: String = "TestMessage",
+    severity: Severity = Severity.Error,
+    suppressReasons: List<String> = emptyList(),
+): Issue = Issue(
+    ruleInstance = ruleInstance,
+    entity = entity,
+    references = emptyList(),
+    message = message,
+    severity = severity,
+    suppressReasons = suppressReasons,
 )
 
-fun createIssue(id: String) = Issue(
+fun createIssue(
+    ruleInstance: RuleInstance,
+    location: Issue.Location,
+    message: String = "TestMessage",
+    severity: Severity = Severity.Error,
+    suppressReasons: List<String> = emptyList(),
+): Issue = Issue(
+    ruleInstance = ruleInstance,
+    entity = createEntity(location = location),
+    references = emptyList(),
+    message = message,
+    severity = severity,
+    suppressReasons = suppressReasons,
+)
+
+@Suppress("LongParameterList")
+fun createRuleInstance(
+    id: String = "TestSmell/id",
+    ruleSetId: String = "RuleSet${id.substringBefore("/")}",
+    url: String? = null,
+    description: String = "Description ${id.substringBefore("/")}",
+    severity: Severity = Severity.Error,
+    active: Boolean = true,
+): RuleInstance = RuleInstance(
     id = id,
-    severity = Severity.CodeSmell,
-    description = "Description $id",
-    debt = Debt.FIVE_MINS
+    ruleSetId = RuleSet.Id(ruleSetId),
+    url = url?.let(::URI),
+    description = description,
+    severity = severity,
+    active = active,
 )
 
 fun createEntity(
-    path: String,
-    position: Pair<Int, Int> = 1 to 1,
-    text: IntRange = 0..0,
-    ktElement: KtElement? = null,
-    basePath: String? = null
-) = Entity(
-    name = "TestEntity",
-    signature = "TestEntitySignature",
-    location = Location(
-        source = SourceLocation(position.first, position.second),
-        text = TextLocation(text.first, text.last),
-        filePath = basePath?.let { FilePath.fromRelative(Paths.get(it), Paths.get(path)) }
-            ?: FilePath.fromAbsolute(Paths.get(path))
-    ),
-    ktElement = ktElement
+    signature: String = "TestEntitySignature",
+    location: Issue.Location = createLocation(),
+): Issue.Entity = Issue.Entity(
+    signature = signature,
+    location = location,
 )
+
+fun createLocation(
+    path: String = "TestFile.kt",
+    position: Pair<Int, Int> = 1 to 1,
+    endPosition: Pair<Int, Int> = 1 to 1,
+    text: IntRange = 0..0,
+): Issue.Location {
+    require(!path.startsWith("/")) { "The path shouldn't start with '/'" }
+    return Issue.Location(
+        source = SourceLocation(position.first, position.second),
+        endSource = SourceLocation(endPosition.first, endPosition.second),
+        text = TextLocation(text.first, text.last),
+        path = Path(path),
+    )
+}

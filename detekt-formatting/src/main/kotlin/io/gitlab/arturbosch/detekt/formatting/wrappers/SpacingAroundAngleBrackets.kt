@@ -1,16 +1,20 @@
 package io.gitlab.arturbosch.detekt.formatting.wrappers
 
-import com.pinterest.ktlint.ruleset.experimental.SpacingAroundAngleBracketsRule
+import com.pinterest.ktlint.ruleset.standard.rules.SpacingAroundAngleBracketsRule
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.internal.AutoCorrectable
 import io.gitlab.arturbosch.detekt.formatting.FormattingRule
 
 /**
- * See <a href="https://ktlint.github.io/#rule-spacing">ktlint-website</a> for documentation.
+ * See [ktlint docs](https://pinterest.github.io/ktlint/<ktlintVersion/>/rules/standard/#angle-bracket-spacing) for documentation.
  */
 @AutoCorrectable(since = "1.16.0")
-class SpacingAroundAngleBrackets(config: Config) : FormattingRule(config) {
+@ActiveByDefault(since = "1.22.0")
+class SpacingAroundAngleBrackets(config: Config) : FormattingRule(
+    config,
+    "Reports spaces around angle brackets"
+) {
 
     override val wrapping = SpacingAroundAngleBracketsRule()
-    override val issue = issueFor("Reports spaces around angle brackets")
 }

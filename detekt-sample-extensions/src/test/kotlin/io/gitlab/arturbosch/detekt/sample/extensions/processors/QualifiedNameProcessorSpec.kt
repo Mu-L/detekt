@@ -9,28 +9,25 @@ import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.kotlin.com.intellij.openapi.util.Key
 import org.jetbrains.kotlin.com.intellij.util.keyFMap.KeyFMap
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Test
 
-class QualifiedNameProcessorSpec : Spek({
+class QualifiedNameProcessorSpec {
 
-    describe("QualifiedNameProcessor") {
+    @Test
+    fun fqNamesOfTestFiles() {
+        val ktFile = compileContentForTest(code)
+        val processor = QualifiedNameProcessor()
+        processor.onProcess(ktFile, BindingContext.EMPTY)
+        processor.onFinish(listOf(ktFile), result, BindingContext.EMPTY)
 
-        it("fqNamesOfTestFiles") {
-            val ktFile = compileContentForTest(code)
-            val processor = QualifiedNameProcessor()
-            processor.onProcess(ktFile, BindingContext.EMPTY)
-            processor.onFinish(listOf(ktFile), result, BindingContext.EMPTY)
-
-            val data = result.getData(fqNamesKey)
-            assertThat(data).contains(
-                "io.gitlab.arturbosch.detekt.sample.Foo",
-                "io.gitlab.arturbosch.detekt.sample.Bar",
-                "io.gitlab.arturbosch.detekt.sample.Bla"
-            )
-        }
+        val data = result.getData(fqNamesKey)
+        assertThat(data).contains(
+            "io.gitlab.arturbosch.detekt.sample.Foo",
+            "io.gitlab.arturbosch.detekt.sample.Bar",
+            "io.gitlab.arturbosch.detekt.sample.Bla"
+        )
     }
-})
+}
 
 private val result = object : Detektion {
 
@@ -45,19 +42,15 @@ private val result = object : Detektion {
         userData = userData.plus(key, requireNotNull(value))
     }
 
-    override fun add(notification: Notification) {
-        throw UnsupportedOperationException("not implemented")
-    }
+    override fun add(notification: Notification): Unit = throw UnsupportedOperationException("not implemented")
 
-    override fun add(projectMetric: ProjectMetric) {
-        throw UnsupportedOperationException("not implemented")
-    }
+    override fun add(projectMetric: ProjectMetric): Unit = throw UnsupportedOperationException("not implemented")
 }
 
-const val code = """
+private val code = """
     package io.gitlab.arturbosch.detekt.sample
 
     class Foo {}
     object Bar {}
     interface Bla {}
-"""
+""".trimIndent()

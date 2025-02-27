@@ -13,10 +13,16 @@ import kotlinx.html.span
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.net.URLEncoder
+import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
-internal fun FlowContent.snippetCode(ruleName: String, lines: Sequence<String>, location: SourceLocation, length: Int) {
+internal fun FlowContent.snippetCode(
+    id: String,
+    lines: Sequence<String>,
+    location: SourceLocation,
+    length: Int,
+) {
     try {
         pre {
             code {
@@ -28,7 +34,7 @@ internal fun FlowContent.snippetCode(ruleName: String, lines: Sequence<String>, 
                     .drop(dropLineCount)
                     .take(takeLineCount)
                     .forEach { line ->
-                        span("lineno") { text("%1$4s ".format(currentLineNumber)) }
+                        span("lineno") { text("%1$4s ".format(Locale.ROOT, currentLineNumber)) }
                         if (currentLineNumber >= location.line && errorLength > 0) {
                             val column = if (currentLineNumber == location.line) location.column - 1 else 0
                             errorLength -= writeErrorLine(line, column, errorLength) + 1 // we need to consume the \n
@@ -41,7 +47,7 @@ internal fun FlowContent.snippetCode(ruleName: String, lines: Sequence<String>, 
             }
         }
     } catch (@Suppress("TooGenericExceptionCaught") ex: Throwable) {
-        showError(ruleName, ex)
+        showError(id, ex)
     }
 }
 
@@ -60,15 +66,15 @@ private fun FlowContent.writeErrorLine(line: String, errorStarts: Int, length: I
     return errorEnds - errorStarts
 }
 
-private fun FlowContent.showError(ruleName: String, throwable: Throwable) {
+private fun FlowContent.showError(id: String, throwable: Throwable) {
     div("exception") {
         h4 {
             text("Error showing the code snippet")
         }
 
         p {
-            text("This seems to be an error in the rule $ruleName, please ")
-            a(createReportUrl(ruleName, throwable)) {
+            text("This seems to be an error in the rule $id, please ")
+            a(createReportUrl(id, throwable)) {
                 text("report this issue")
             }
             text(".")
@@ -76,22 +82,23 @@ private fun FlowContent.showError(ruleName: String, throwable: Throwable) {
     }
 }
 
-private fun createReportUrl(ruleName: String, throwable: Throwable): String {
-    val title = URLEncoder.encode("HtmlReport error in rule: $ruleName", "UTF8")
+private fun createReportUrl(ruleId: String, throwable: Throwable): String {
+    val title = URLEncoder.encode("HtmlReport error in rule: $ruleId", "UTF8")
     val stackTrace = throwable.printStackTraceString()
         .lineSequence()
         .take(STACK_TRACE_LINES_TO_SHOW)
         .joinToString("\n")
     val bodyMessage = """
-            |I found an error in the html report:
-            |- Rule: $ruleName
-            |- Detekt version: ${whichDetekt() ?: "<WRITE HERE THE VERSION OF DETEKT THAT YOU ARE USING>"}
-            |- Stacktrace:
-            |```
-            |$stackTrace
-            |```
-            |- How to reproduce it: <WRITE HERE HOW TO REPRODUCE THIS ISSUE. A CODE SNIPPET IS THE BEST WAY.>
-            |""".trimMargin()
+        |I found an error in the html report:
+        |- Rule: $ruleId
+        |- detekt version: ${whichDetekt()}"}
+        |- Stacktrace:
+        |```
+        |$stackTrace
+        |```
+        |- How to reproduce it: <WRITE HERE HOW TO REPRODUCE THIS ISSUE. A CODE SNIPPET IS THE BEST WAY.>
+        |
+    """.trimMargin()
     val body = URLEncoder.encode(bodyMessage, "UTF8")
 
     return "https://github.com/detekt/detekt/issues/new?body=$body&title=$title"

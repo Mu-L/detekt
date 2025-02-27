@@ -1,18 +1,16 @@
 style rule set
 
-### WildcardImport
+### MagicNumber
 
 a wildcard import
 
 **Active by default**: Yes - Since v1.0.0
 
-**Debt**: 10min
-
 **Aliases**: alias1, alias2
 
 #### Configuration options:
 
-* ``conf1`` (default: ``foo``)
+* ``conf1`` (default: ``'foo'``)
 
   a config option
 
@@ -62,7 +60,25 @@ removes :Unit
 
 **Requires Type Resolution**
 
-**Debt**: 5m
+#### Noncompliant Code:
+
+```kotlin
+fun stuff(): Unit {}
+```
+
+#### Compliant Code:
+
+```kotlin
+fun stuff() {}
+```
+
+### ~~DuplicateCaseInWhenExpression~~
+
+is deprecated
+
+Duplicated `case` statements in a `when` expression detected.
+
+**Active by default**: Yes - Since v1.16.0
 
 #### Noncompliant Code:
 

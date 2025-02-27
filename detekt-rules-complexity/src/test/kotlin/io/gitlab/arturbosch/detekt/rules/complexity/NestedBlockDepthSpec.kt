@@ -1,87 +1,130 @@
 package io.gitlab.arturbosch.detekt.rules.complexity
 
-import io.github.detekt.test.utils.resourceAsPath
-import io.gitlab.arturbosch.detekt.api.ThresholdedCodeSmell
 import io.gitlab.arturbosch.detekt.test.TestConfig
 import io.gitlab.arturbosch.detekt.test.assertThat
-import io.gitlab.arturbosch.detekt.test.compileAndLint
 import io.gitlab.arturbosch.detekt.test.lint
-import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Test
 
-class NestedBlockDepthSpec : Spek({
+class NestedBlockDepthSpec {
 
-    val defaultThreshold = 4
-    val defaultConfig by memoized { TestConfig(mapOf("threshold" to defaultThreshold)) }
-    val subject by memoized { NestedBlockDepth(defaultConfig) }
+    private val defaultAllowedDepth = 3
+    private val defaultConfig = TestConfig("allowedDepth" to defaultAllowedDepth)
+    private val subject = NestedBlockDepth(defaultConfig)
 
-    describe("nested classes are also considered") {
-        it("should detect only the nested large class") {
-            subject.lint(resourceAsPath("NestedClasses.kt"))
-            assertThat(subject.findings).hasSize(1)
-            assertThat((subject.findings[0] as ThresholdedCodeSmell).value).isEqualTo(5)
-        }
-
-        it("should detect too nested block depth") {
-            val code = """
-                fun f() {
-                    if (true) {
-                        if (true) {
+    @Test
+    fun `should ignore class nesting levels`() {
+        val code = """
+            class NestedClasses {
+            
+                class InnerClass {
+            
+                    class NestedInnerClass {
+            
+                        fun nestedLongMethod() {
                             if (true) {
                                 if (true) {
+                                    if (true) {
+                                        5.run {
+                                            this.let {
+                                                listOf(1, 2, 3).map { it * 2 }
+                                                    .groupBy(Int::toString, Int::toString)
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                }"""
-            val findings = subject.compileAndLint(code)
-
-            assertThat(findings).hasSize(1)
-            assertThat(findings).hasTextLocations(4 to 5)
-        }
-
-        it("should not detect valid nested block depth") {
-            val code = """
-                fun f() {
-                    if (true) {
-                        if (true) {
-                            if (true) {
-                            }
-                        }
-                    }
-                }"""
-            assertThat(subject.compileAndLint(code)).isEmpty()
-        }
-
-        it("does not report valid nested if else branches") {
-            val code = """
-                fun f() {
-                    if (true) {
-                        if (true) {
-                        } else if (true) {
-                            if (true) {
-                            }
-                        }
-                    }
-                }"""
-            assertThat(subject.compileAndLint(code)).isEmpty()
-        }
-
-        it("reports deeply nested if else branches") {
-            val code = """
-                fun f() {
-                    if (true) {
-                        if (true) {
-                        } else if (true) {
-                            if (true) {
-                                if (true) {
+            
+                            try {
+                                for (i in 1..5) {
+                                    when (i) {
+                                        1 -> print(1)
+                                    }
                                 }
+                            } finally {
+            
                             }
+            
+                            fun nestedLocalMethod() {
+                                println()
+                            }
+                            nestedLocalMethod()
                         }
                     }
-                }"""
-            assertThat(subject.compileAndLint(code)).hasSize(1)
-        }
+                }
+            }
+        """.trimIndent()
+        val findings = subject.lint(code)
+
+        assertThat(findings).hasSize(1)
     }
-})
+
+    @Test
+    fun `should detect too nested block depth`() {
+        val code = """
+            fun f() {
+                if (true) {
+                    if (true) {
+                        if (true) {
+                            if (true) {
+                            }
+                        }
+                    }
+                }
+            }
+        """.trimIndent()
+        val findings = subject.lint(code)
+
+        assertThat(findings)
+            .hasSize(1)
+            .hasTextLocations(4 to 5)
+    }
+
+    @Test
+    fun `should not detect valid nested block depth`() {
+        val code = """
+            fun f() {
+                if (true) {
+                    if (true) {
+                        if (true) {
+                        }
+                    }
+                }
+            }
+        """.trimIndent()
+        assertThat(subject.lint(code)).isEmpty()
+    }
+
+    @Test
+    fun `does not report valid nested if else branches`() {
+        val code = """
+            fun f() {
+                if (true) {
+                    if (true) {
+                    } else if (true) {
+                        if (true) {
+                        }
+                    }
+                }
+            }
+        """.trimIndent()
+        assertThat(subject.lint(code)).isEmpty()
+    }
+
+    @Test
+    fun `reports deeply nested if else branches`() {
+        val code = """
+            fun f() {
+                if (true) {
+                    if (true) {
+                    } else if (true) {
+                        if (true) {
+                            if (true) {
+                            }
+                        }
+                    }
+                }
+            }
+        """.trimIndent()
+        assertThat(subject.lint(code)).hasSize(1)
+    }
+}

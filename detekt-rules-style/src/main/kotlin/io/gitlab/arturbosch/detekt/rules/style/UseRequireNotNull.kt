@@ -1,17 +1,14 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import io.gitlab.arturbosch.detekt.rules.isCallingWithNonNullCheckArgument
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtCallExpression
-import org.jetbrains.kotlin.resolve.BindingContext
 
 /**
  * Turn on this rule to flag `require` calls for not-null check that can be replaced with a `requireNotNull` call.
@@ -24,20 +21,18 @@ import org.jetbrains.kotlin.resolve.BindingContext
  * requireNotNull(x)
  * </compliant>
  */
-@RequiresTypeResolution
-class UseRequireNotNull(config: Config = Config.empty) : Rule(config) {
-    override val issue = Issue(
-        "UseRequireNotNull",
-        Severity.Style,
-        "Use requireNotNull() instead of require() for checking not-null.",
-        Debt.FIVE_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class UseRequireNotNull(config: Config) :
+    Rule(
+        config,
+        "Use requireNotNull() instead of require() for checking not-null."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitCallExpression(expression: KtCallExpression) {
         super.visitCallExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
         if (expression.isCallingWithNonNullCheckArgument(requireFunctionFqName, bindingContext)) {
-            report(CodeSmell(issue, Entity.from(expression), issue.description))
+            report(Finding(Entity.from(expression), description))
         }
     }
 

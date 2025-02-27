@@ -1,14 +1,19 @@
-@file:Suppress("UNCHECKED_CAST")
-
 package io.gitlab.arturbosch.detekt.core.config
 
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.Config.Companion.CONFIG_SEPARATOR
 import io.gitlab.arturbosch.detekt.api.Notification
-import org.yaml.snakeyaml.Yaml
+import io.gitlab.arturbosch.detekt.core.config.validation.ValidatableConfiguration
+import io.gitlab.arturbosch.detekt.core.config.validation.validateConfig
+import io.gitlab.arturbosch.detekt.core.util.indentCompat
+import org.snakeyaml.engine.v2.api.Load
+import org.snakeyaml.engine.v2.api.LoadSettings
 import java.io.Reader
-import java.net.URL
 import java.nio.file.Path
+import kotlin.io.path.exists
+import kotlin.io.path.isReadable
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.reader
 
 /**
  * Config implementation using the yaml format. SubConfigurations can return sub maps according to the
@@ -16,52 +21,59 @@ import java.nio.file.Path
  */
 class YamlConfig internal constructor(
     val properties: Map<String, Any>,
-    override val parentPath: String? = null
+    override val parentPath: String?,
+    override val parent: Config?,
 ) : Config, ValidatableConfiguration {
 
     override fun subConfig(key: String): Config {
-        val subProperties = properties.getOrElse(key) { emptyMap<String, Any>() }
+        @Suppress("UNCHECKED_CAST")
+        val subProperties = properties.getOrElse(key) { emptyMap<String, Any>() } as Map<String, Any>
         return YamlConfig(
-            subProperties as Map<String, Any>,
-            if (parentPath == null) key else "$parentPath $CONFIG_SEPARATOR $key"
+            subProperties,
+            if (parentPath == null) key else "$parentPath $CONFIG_SEPARATOR $key",
+            this,
         )
     }
 
+    override fun subConfigKeys(): Set<String> = properties.keys
+
     override fun <T : Any> valueOrDefault(key: String, default: T): T {
         val result = properties[key]
+        @Suppress("UNCHECKED_CAST")
         return valueOrDefaultInternal(key, result, default) as T
     }
 
     override fun <T : Any> valueOrNull(key: String): T? {
+        @Suppress("UNCHECKED_CAST")
         return properties[key] as? T?
     }
 
-    override fun toString(): String {
-        return "YamlConfig(properties=$properties)"
-    }
+    @Suppress("MagicNumber")
+    override fun toString() = """
+        YamlConfig(
+            ${properties.toPrettyString(recursive = 1).indentCompat(12).trim()},
+        )
+    """.trimIndent()
 
     override fun validate(baseline: Config, excludePatterns: Set<Regex>): List<Notification> =
         validateConfig(this, baseline, excludePatterns)
 
     companion object {
+        private const val YAML_DOC_LIMIT = 102_400 // limit the YAML size to 100 kB
+
+        // limit the anchors/aliases for collections to prevent attacks from for untrusted sources
+        private const val ALIASES_LIMIT = 100
 
         /**
-         * Factory method to load a yaml configuration. Given path must exist
-         * and point to a readable file.
+         * Factory method to load a yaml configuration. Given path must exist and point to a readable file.
          */
-        fun load(path: Path): Config =
-            load(
-                path.toFile().apply {
-                    require(exists()) { "Configuration does not exist: $path" }
-                    require(isFile) { "Configuration must be a file: $path" }
-                    require(canRead()) { "Configuration must be readable: $path" }
-                }.reader()
-            )
+        fun load(path: Path): Config {
+            require(path.exists()) { "Configuration does not exist: $path" }
+            require(path.isRegularFile()) { "Configuration must be a file: $path" }
+            require(path.isReadable()) { "Configuration must be readable: $path" }
 
-        /**
-         * Factory method to load a yaml configuration from a URL.
-         */
-        fun loadResource(url: URL): Config = load(url.openStream().reader())
+            return load(path.reader())
+        }
 
         /**
          * Constructs a [YamlConfig] from any [Reader].
@@ -70,14 +82,35 @@ class YamlConfig internal constructor(
          */
         fun load(reader: Reader): Config = reader.buffered().use { bufferedReader ->
             val map: Map<*, *>? = runCatching {
-                @Suppress("USELESS_CAST") // runtime inference bug
-                Yaml().loadAs(bufferedReader, Map::class.java) as Map<*, *>?
+                @Suppress("UNCHECKED_CAST")
+                createYamlLoad().loadFromReader(bufferedReader) as Map<String, *>?
             }.getOrElse { throw Config.InvalidConfigurationError(it) }
-            if (map == null) {
-                YamlConfig(emptyMap())
-            } else {
-                YamlConfig(map as Map<String, Any>)
-            }
+            @Suppress("UNCHECKED_CAST")
+            YamlConfig(map.orEmpty() as Map<String, Any>, null, null)
         }
+
+        private fun createYamlLoad() = Load(
+            LoadSettings.builder()
+                .setAllowDuplicateKeys(false)
+                .setAllowRecursiveKeys(false)
+                .setCodePointLimit(YAML_DOC_LIMIT)
+                .setMaxAliasesForCollections(ALIASES_LIMIT)
+                .build()
+        )
     }
 }
+
+@Suppress("MagicNumber")
+private fun Map<*, *>.toPrettyString(recursive: Int): String =
+    if (isEmpty()) {
+        "{}"
+    } else {
+        toList()
+            .joinToString(separator = ",\n    ", prefix = "{\n    ", postfix = ",\n}") { (key, value) ->
+                when {
+                    recursive == 0 -> "$key=$value"
+                    value is Map<*, *> -> "$key=${value.toPrettyString(recursive - 1).indentCompat(4).trim()}"
+                    else -> "$key=$value"
+                }
+            }
+    }

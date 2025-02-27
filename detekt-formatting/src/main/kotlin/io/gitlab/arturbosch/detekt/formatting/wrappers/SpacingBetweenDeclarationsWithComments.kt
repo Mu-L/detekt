@@ -1,19 +1,21 @@
 package io.gitlab.arturbosch.detekt.formatting.wrappers
 
-import com.pinterest.ktlint.ruleset.experimental.SpacingBetweenDeclarationsWithCommentsRule
+import com.pinterest.ktlint.ruleset.standard.rules.SpacingBetweenDeclarationsWithCommentsRule
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.internal.AutoCorrectable
 import io.gitlab.arturbosch.detekt.formatting.FormattingRule
 
 /**
- * See <a href="https://ktlint.github.io/#rule-spacing">ktlint-website</a> for documentation.
+ * See [ktlint docs](https://pinterest.github.io/ktlint/<ktlintVersion/>/rules/standard/#blank-line-between-declaration-with-comments)
+ * for documentation.
  */
 @AutoCorrectable(since = "1.10.0")
-class SpacingBetweenDeclarationsWithComments(config: Config) : FormattingRule(config) {
+@ActiveByDefault(since = "1.22.0")
+class SpacingBetweenDeclarationsWithComments(config: Config) : FormattingRule(
+    config,
+    "Declarations and declarations with comments should have an empty space between."
+) {
 
     override val wrapping = SpacingBetweenDeclarationsWithCommentsRule()
-    override val issue = issueFor(
-        // message reported by the KtLint rule
-        "Declarations and declarations with comments should have an empty space between."
-    )
 }

@@ -2,7 +2,6 @@ package io.github.detekt.tooling.api
 
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.resolve.BindingContext
-import java.nio.file.Path
 
 /**
  * Instance of detekt.
@@ -11,11 +10,9 @@ import java.nio.file.Path
  */
 interface Detekt {
 
+    // Used by detekt-cli
     fun run(): AnalysisResult
 
-    fun run(path: Path): AnalysisResult
-
-    fun run(sourceCode: String, filename: String): AnalysisResult
-
+    // Used by detekt-compiler-plugin
     fun run(files: Collection<KtFile>, bindingContext: BindingContext): AnalysisResult
 }

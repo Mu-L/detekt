@@ -1,7 +1,7 @@
 package io.gitlab.arturbosch.detekt.core.reporting
 
 import io.github.detekt.report.html.HtmlOutputReport
-import io.github.detekt.report.txt.TxtOutputReport
+import io.github.detekt.report.md.MdOutputReport
 import io.github.detekt.report.xml.XmlOutputReport
 import io.github.detekt.test.utils.StringPrintStream
 import io.github.detekt.test.utils.createTempFileForTest
@@ -9,20 +9,32 @@ import io.github.detekt.test.utils.resourceAsPath
 import io.gitlab.arturbosch.detekt.core.DetektResult
 import io.gitlab.arturbosch.detekt.core.createNullLoggingSpec
 import io.gitlab.arturbosch.detekt.core.tooling.withSettings
-import io.gitlab.arturbosch.detekt.test.createFinding
+import io.gitlab.arturbosch.detekt.test.createEntity
+import io.gitlab.arturbosch.detekt.test.createIssue
+import io.gitlab.arturbosch.detekt.test.createLocation
+import io.gitlab.arturbosch.detekt.test.createRuleInstance
 import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
+import org.junit.jupiter.api.Test
 import java.nio.file.Path
 
-internal class OutputFacadeSpec : Spek({
+class OutputFacadeSpec {
 
-    test("Running the output facade with multiple reports") {
+    @Test
+    fun `Running the output facade with multiple reports`() {
         val printStream = StringPrintStream()
         val inputPath: Path = resourceAsPath("/cases")
-        val defaultResult = DetektResult(mapOf("Key" to listOf(createFinding())))
-        val plainOutputPath = createTempFileForTest("detekt", ".txt")
+        val defaultResult = DetektResult(
+            issues = listOf(
+                createIssue(
+                    createRuleInstance(ruleSetId = "Key"),
+                    createEntity(location = createLocation("TestFile.kt"))
+                )
+            ),
+            rules = emptyList(),
+        )
         val htmlOutputPath = createTempFileForTest("detekt", ".html")
         val xmlOutputPath = createTempFileForTest("detekt", ".xml")
+        val mdOutputPath = createTempFileForTest("detekt", ".md")
 
         val spec = createNullLoggingSpec {
             project {
@@ -30,8 +42,8 @@ internal class OutputFacadeSpec : Spek({
             }
             reports {
                 report { "html" to htmlOutputPath }
-                report { "txt" to plainOutputPath }
                 report { "xml" to xmlOutputPath }
+                report { "md" to mdOutputPath }
             }
             logging {
                 outputChannel = printStream
@@ -41,9 +53,9 @@ internal class OutputFacadeSpec : Spek({
         spec.withSettings { OutputFacade(this).run(defaultResult) }
 
         assertThat(printStream.toString()).contains(
-            "Successfully generated ${TxtOutputReport().name} at $plainOutputPath",
-            "Successfully generated ${XmlOutputReport().name} at $xmlOutputPath",
-            "Successfully generated ${HtmlOutputReport().name} at $htmlOutputPath"
+            "Successfully generated ${XmlOutputReport().id} at ${xmlOutputPath.toUri()}",
+            "Successfully generated ${HtmlOutputReport().id} at ${htmlOutputPath.toUri()}",
+            "Successfully generated ${MdOutputReport().id} at ${mdOutputPath.toUri()}"
         )
     }
-})
+}

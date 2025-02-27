@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION") // FIXME remove PsiCoreCommentImpl in IntelliJ 2020.3
-
 package io.github.detekt.metrics
 
 import org.jetbrains.kotlin.com.intellij.lang.ASTNode
@@ -8,7 +6,6 @@ import org.jetbrains.kotlin.com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.com.intellij.psi.PsiWhiteSpace
 import org.jetbrains.kotlin.com.intellij.psi.impl.source.tree.LeafElement
 import org.jetbrains.kotlin.com.intellij.psi.impl.source.tree.PsiCommentImpl
-import org.jetbrains.kotlin.com.intellij.psi.impl.source.tree.PsiCoreCommentImpl
 import org.jetbrains.kotlin.com.intellij.psi.impl.source.tree.PsiWhiteSpaceImpl
 import org.jetbrains.kotlin.diagnostics.DiagnosticUtils
 import org.jetbrains.kotlin.kdoc.psi.api.KDoc
@@ -44,23 +41,13 @@ fun KtElement.linesOfCode(inFile: KtFile = this.containingKtFile): Int =
         .distinct()
         .count()
 
-fun ASTNode.line(inFile: KtFile): Int = try {
-    DiagnosticUtils.getLineAndColumnInPsiFile(inFile, this.textRange).line
-} catch (@Suppress("SwallowedException", "TooGenericExceptionCaught") e: IndexOutOfBoundsException) {
-    // When auto-correctable rules performs actual mutation, KtFile.text is updated but
-    // KtFile.viewProvider.document is not updated. This will cause crash in subsequent rules
-    // if they are using any function relying on the KtFile.viewProvider.document.
-    // The exception is silenced to return -1 while we should seek long-term solution for execution
-    // order of rules (#3445)
-    -1
-}
+fun ASTNode.line(inFile: KtFile): Int = DiagnosticUtils.getLineAndColumnInPsiFile(inFile, this.textRange).line
 
 private val comments: Set<Class<out PsiElement>> = setOf(
     PsiWhiteSpace::class.java,
     PsiWhiteSpaceImpl::class.java,
     PsiComment::class.java,
     PsiCommentImpl::class.java,
-    PsiCoreCommentImpl::class.java,
     KDoc::class.java,
     KDocImpl::class.java,
     KDocElementImpl::class.java,

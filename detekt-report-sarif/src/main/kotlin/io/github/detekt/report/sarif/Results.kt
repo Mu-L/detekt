@@ -1,48 +1,53 @@
 package io.github.detekt.report.sarif
 
-import io.github.detekt.psi.toUnifiedString
 import io.github.detekt.sarif4k.ArtifactLocation
 import io.github.detekt.sarif4k.Level
 import io.github.detekt.sarif4k.Message
 import io.github.detekt.sarif4k.PhysicalLocation
 import io.github.detekt.sarif4k.Region
-import io.gitlab.arturbosch.detekt.api.Detektion
-import io.gitlab.arturbosch.detekt.api.Finding
-import io.gitlab.arturbosch.detekt.api.Location
-import io.gitlab.arturbosch.detekt.api.RuleSetId
-import io.gitlab.arturbosch.detekt.api.SeverityLevel
+import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Severity
+import io.gitlab.arturbosch.detekt.api.suppressed
+import java.security.MessageDigest
+import kotlin.io.path.invariantSeparatorsPathString
 
-fun toResults(detektion: Detektion): List<io.github.detekt.sarif4k.Result> =
-    detektion.findings.flatMap { (ruleSetId, findings) ->
-        findings.map { it.toResult(ruleSetId) }
-    }
+internal fun toResults(issues: List<Issue>): List<io.github.detekt.sarif4k.Result> =
+    issues.filterNot { it.suppressed }.map { it.toResult() }
 
-private fun SeverityLevel.toResultLevel() = when (this) {
-    SeverityLevel.ERROR -> Level.Error
-    SeverityLevel.WARNING -> Level.Warning
-    SeverityLevel.INFO -> Level.Note
+internal fun Severity.toResultLevel() = when (this) {
+    Severity.Error -> Level.Error
+    Severity.Warning -> Level.Warning
+    Severity.Info -> Level.Note
 }
 
-private fun Finding.toResult(ruleSetId: RuleSetId) = io.github.detekt.sarif4k.Result(
-    ruleID = "detekt.$ruleSetId.$id",
-    level = severity.toResultLevel(),
-    locations = (listOf(location) + references.map { it.location }).map(Location::toLocation).toSet().toList(),
-    message = Message(text = messageOrDescription())
-)
+private fun Issue.toResult(): io.github.detekt.sarif4k.Result =
+    io.github.detekt.sarif4k.Result(
+        ruleID = "detekt.${ruleInstance.ruleSetId}.${ruleInstance.id}",
+        level = severity.toResultLevel(),
+        locations = (listOf(location) + references.map { it.location }).map { it.toLocation() }.distinct(),
+        message = Message(text = message),
+        partialFingerprints = mapOf(
+            "signature/v1" to entity.signature.sha1(),
+        )
+    )
 
-private fun Location.toLocation() = io.github.detekt.sarif4k.Location(
-    physicalLocation = PhysicalLocation(
-        region = Region(
-            startLine = source.line.toLong(),
-            startColumn = source.column.toLong(),
-        ),
-        artifactLocation = if (filePath.relativePath != null) {
-            ArtifactLocation(
-                uri = filePath.relativePath?.toUnifiedString(),
+private fun Issue.Location.toLocation(): io.github.detekt.sarif4k.Location =
+    io.github.detekt.sarif4k.Location(
+        physicalLocation = PhysicalLocation(
+            region = Region(
+                startLine = source.line.toLong(),
+                startColumn = source.column.toLong(),
+                endLine = endSource.line.toLong(),
+                endColumn = endSource.column.toLong(),
+            ),
+            artifactLocation = ArtifactLocation(
+                uri = path.invariantSeparatorsPathString,
                 uriBaseID = SRCROOT
             )
-        } else {
-            ArtifactLocation(uri = filePath.absolutePath.toUnifiedString())
-        }
+        )
     )
-)
+
+private fun String.sha1(): String = MessageDigest
+    .getInstance("SHA-1")
+    .digest(toByteArray())
+    .joinToString("") { it.toUByte().toString(radix = 16).padStart(2, '0') }

@@ -1,12 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.com.intellij.psi.PsiComment
 import org.jetbrains.kotlin.com.intellij.psi.PsiWhiteSpace
 import org.jetbrains.kotlin.psi.KtNamedFunction
@@ -33,9 +30,10 @@ import org.jetbrains.kotlin.psi.psiUtil.siblings
  * fun <V> foo(): Int where V : Int = 5
  * </compliant>
  */
-class EqualsOnSignatureLine(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(javaClass.simpleName, Severity.Style, MESSAGE, Debt.FIVE_MINS)
+class EqualsOnSignatureLine(config: Config) : Rule(
+    config,
+    MESSAGE
+) {
 
     override fun visitNamedFunction(function: KtNamedFunction) {
         val equalsToken = function.equalsToken ?: return
@@ -44,11 +42,11 @@ class EqualsOnSignatureLine(config: Config = Config.empty) : Rule(config) {
             .takeWhile { it is PsiWhiteSpace || it is PsiComment }
             .any { it is PsiWhiteSpace && it.textContains('\n') }
         if (hasLineBreakBeforeEqualsToken) {
-            report(CodeSmell(issue, Entity.from(equalsToken), MESSAGE))
+            report(Finding(Entity.from(equalsToken), MESSAGE))
         }
     }
 
     private companion object {
-        const val MESSAGE = "Equals signs for expression style functions should be on the same line as the signature"
+        const val MESSAGE = "Equals signs for expression style functions should be on the same line as the signature."
     }
 }

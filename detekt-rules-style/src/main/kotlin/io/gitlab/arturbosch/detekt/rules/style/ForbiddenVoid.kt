@@ -1,15 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import io.gitlab.arturbosch.detekt.rules.fqNameOrNull
 import io.gitlab.arturbosch.detekt.rules.isOverride
 import org.jetbrains.kotlin.name.FqName
@@ -19,7 +17,6 @@ import org.jetbrains.kotlin.psi.KtTypeArgumentList
 import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.psi.psiUtil.anyDescendantOfType
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
-import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.bindingContextUtil.getAbbreviatedTypeOrType
 
 /**
@@ -37,15 +34,13 @@ import org.jetbrains.kotlin.resolve.bindingContextUtil.getAbbreviatedTypeOrType
  * Void::class
  * </compliant>
  */
-@RequiresTypeResolution
-class ForbiddenVoid(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "`Unit` should be used instead of `Void`.",
-        Debt.FIVE_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class ForbiddenVoid(config: Config) :
+    Rule(
+        config,
+        "`Unit` should be used instead of `Void`."
+    ),
+    RequiresFullAnalysis {
 
     @Configuration("ignores void types in signatures of overridden functions")
     private val ignoreOverridden: Boolean by config(false)
@@ -53,9 +48,7 @@ class ForbiddenVoid(config: Config = Config.empty) : Rule(config) {
     @Configuration("ignore void types as generic arguments")
     private val ignoreUsageInGenerics: Boolean by config(false)
 
-    @Suppress("ReturnCount")
     override fun visitTypeReference(typeReference: KtTypeReference) {
-        if (bindingContext == BindingContext.EMPTY) return
         val kotlinType = typeReference.getAbbreviatedTypeOrType(bindingContext) ?: return
 
         if (kotlinType.fqNameOrNull() == VOID_FQ_NAME) {
@@ -65,7 +58,7 @@ class ForbiddenVoid(config: Config = Config.empty) : Rule(config) {
             if (ignoreUsageInGenerics && typeReference.isGenericArgument()) {
                 return
             }
-            report(CodeSmell(issue, Entity.from(typeReference), message = "'Void' should be replaced with 'Unit'."))
+            report(Finding(Entity.from(typeReference), message = "'Void' should be replaced with 'Unit'."))
         }
 
         super.visitTypeReference(typeReference)
@@ -78,7 +71,8 @@ class ForbiddenVoid(config: Config = Config.empty) : Rule(config) {
     private fun KtTypeReference.isPartOfReturnTypeOfFunction() =
         getStrictParentOfType<KtNamedFunction>()
             ?.typeReference
-            ?.anyDescendantOfType<KtTypeReference> { it == this } ?: false
+            ?.anyDescendantOfType<KtTypeReference> { it == this }
+            ?: false
 
     private fun KtTypeReference.isParameterTypeOfFunction() =
         getStrictParentOfType<KtParameter>() != null

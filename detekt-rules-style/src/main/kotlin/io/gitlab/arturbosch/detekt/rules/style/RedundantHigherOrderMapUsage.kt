@@ -1,13 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import io.gitlab.arturbosch.detekt.rules.fqNameOrNull
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.name.FqName
@@ -21,7 +19,7 @@ import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.jetbrains.kotlin.psi.unpackFunctionLiteral
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.bindingContextUtil.getTargetFunctionDescriptor
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.typeUtil.immediateSupertypes
@@ -71,19 +69,17 @@ import org.jetbrains.kotlin.types.typeUtil.immediateSupertypes
  * </compliant>
  *
  */
-@RequiresTypeResolution
-@Suppress("ReturnCount")
-class RedundantHigherOrderMapUsage(config: Config = Config.empty) : Rule(config) {
-    override val issue: Issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Checks for Redundant 'map' calls.",
-        Debt.FIVE_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class RedundantHigherOrderMapUsage(config: Config) :
+    Rule(
+        config,
+        "Checks for redundant 'map' calls, which can be removed."
+    ),
+    RequiresFullAnalysis {
 
+    @Suppress("ReturnCount")
     override fun visitCallExpression(expression: KtCallExpression) {
         super.visitCallExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
 
         val calleeExpression = expression.calleeExpression
         if (calleeExpression?.text != "map") return
@@ -106,12 +102,12 @@ class RedundantHigherOrderMapUsage(config: Config = Config.empty) : Rule(config)
             receiverIsSet -> "This 'map' call can be replaced with 'toList'."
             else -> "This 'map' call can be removed."
         }
-        report(CodeSmell(issue, Entity.from(calleeExpression), message))
+        report(Finding(Entity.from(calleeExpression), message))
     }
 
     private fun KtCallExpression.lambda(): KtLambdaExpression? {
-        val argument = lambdaArguments.singleOrNull() ?: valueArguments.singleOrNull()
-        val lambda = argument?.getArgumentExpression()?.unpackFunctionLiteral() ?: return null
+        val argument = lambdaArguments.singleOrNull() ?: valueArguments.singleOrNull() ?: return null
+        val lambda = argument.getArgumentExpression()?.unpackFunctionLiteral() ?: return null
         if (lambda.valueParameters.firstOrNull()?.destructuringDeclaration != null) return null
         return lambda
     }

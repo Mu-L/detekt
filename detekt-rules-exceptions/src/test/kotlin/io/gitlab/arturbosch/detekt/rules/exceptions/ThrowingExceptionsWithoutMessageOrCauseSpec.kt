@@ -1,50 +1,61 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
 import io.gitlab.arturbosch.detekt.test.TestConfig
-import io.gitlab.arturbosch.detekt.test.compileAndLint
+import io.gitlab.arturbosch.detekt.test.lint
 import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 
-class ThrowingExceptionsWithoutMessageOrCauseSpec : Spek({
-    val subject by memoized {
-        ThrowingExceptionsWithoutMessageOrCause(
-            TestConfig("exceptions" to listOf("IllegalArgumentException"))
-        )
-    }
+class ThrowingExceptionsWithoutMessageOrCauseSpec {
+    val subject = ThrowingExceptionsWithoutMessageOrCause(
+        TestConfig("exceptions" to listOf("IllegalArgumentException"))
+    )
 
-    describe("ThrowingExceptionsWithoutMessageOrCause rule") {
+    @Nested
+    inner class `several exception calls` {
 
-        context("several exception calls") {
-
-            val code = """
-                fun x() {
-                    IllegalArgumentException(IllegalArgumentException())
-                    IllegalArgumentException("foo")
-                    throw IllegalArgumentException()
-                }"""
-
-            it("reports calls to the default constructor") {
-                assertThat(subject.compileAndLint(code)).hasSize(2)
+        val code = """
+            fun x() {
+                IllegalArgumentException(IllegalArgumentException())
+                IllegalArgumentException("foo")
+                throw IllegalArgumentException()
             }
+        """.trimIndent()
 
-            it("does not report calls to the default constructor with empty configuration") {
-                val config = TestConfig("exceptions" to emptyList<String>())
-                val findings = ThrowingExceptionsWithoutMessageOrCause(config).compileAndLint(code)
-                assertThat(findings).isEmpty()
-            }
+        @Test
+        fun `reports calls to the default constructor`() {
+            assertThat(subject.lint(code)).hasSize(2)
         }
 
-        context("a test code which asserts an exception") {
-
-            it("does not report a call to this exception") {
-                val code = """
-                fun test() {
-                    org.assertj.core.api.Assertions.assertThatIllegalArgumentException().isThrownBy { println() }
-                }
-            """
-                assertThat(subject.compileAndLint(code)).isEmpty()
-            }
+        @Test
+        fun `does not report calls to the default constructor with empty configuration`() {
+            val config = TestConfig("exceptions" to emptyList<String>())
+            val findings = ThrowingExceptionsWithoutMessageOrCause(config).lint(code)
+            assertThat(findings).isEmpty()
         }
     }
-})
+
+    @Test
+    fun `a test code which asserts an exception does not report a call to this exception`() {
+        val code = """
+            fun test() {
+                org.assertj.core.api.Assertions.assertThatIllegalArgumentException().isThrownBy { println() }
+            }
+        """.trimIndent()
+        assertThat(subject.lint(code)).isEmpty()
+    }
+
+    @Test
+    fun `don't raise an issue when only matches ignoring cases`() {
+        val code = """
+            fun illegalArgumentException() {
+                // no-op
+            }
+
+            fun test() {
+                illegalArgumentException()
+            }
+        """.trimIndent()
+        assertThat(subject.lint(code)).isEmpty()
+    }
+}

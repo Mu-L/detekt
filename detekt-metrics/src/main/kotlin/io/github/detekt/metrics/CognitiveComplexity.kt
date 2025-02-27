@@ -1,6 +1,7 @@
 package io.github.detekt.metrics
 
 import io.gitlab.arturbosch.detekt.api.DetektVisitor
+import org.jetbrains.kotlin.KtNodeTypes
 import org.jetbrains.kotlin.com.intellij.openapi.util.Key
 import org.jetbrains.kotlin.com.intellij.psi.tree.IElementType
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -8,6 +9,7 @@ import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtBreakExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCatchClause
+import org.jetbrains.kotlin.psi.KtContainerNodeForControlStructureBody
 import org.jetbrains.kotlin.psi.KtContinueExpression
 import org.jetbrains.kotlin.psi.KtDoWhileExpression
 import org.jetbrains.kotlin.psi.KtElement
@@ -46,9 +48,7 @@ class CognitiveComplexity private constructor() : DetektVisitor() {
     data class BinExprHolder(val expr: KtBinaryExpression, val op: IElementType, val isEnclosed: Boolean)
 
     @Suppress("detekt.TooManyFunctions") // visitor pattern
-    inner class FunctionComplexity(
-        private val givenFunction: KtNamedFunction
-    ) : DetektVisitor() {
+    class FunctionComplexity(private val givenFunction: KtNamedFunction) : DetektVisitor() {
         internal var complexity: Int = 0
 
         private var nesting: Int = 0
@@ -90,9 +90,34 @@ class CognitiveComplexity private constructor() : DetektVisitor() {
             nestAround { super.visitForExpression(expression) }
         }
 
-        override fun visitIfExpression(expression: KtIfExpression) {
-            addComplexity()
-            nestAround { super.visitIfExpression(expression) }
+        override fun visitKtElement(element: KtElement) {
+            val parent = element.parent
+            if (element is KtContainerNodeForControlStructureBody && parent is KtIfExpression) {
+                when (element.node.elementType) {
+                    KtNodeTypes.THEN -> {
+                        if (parent.parent.node.elementType == KtNodeTypes.ELSE) {
+                            complexity++
+                        } else {
+                            addComplexity()
+                        }
+                        nestAround { super.visitKtElement(element) }
+                    }
+
+                    KtNodeTypes.ELSE -> {
+                        if (element.expression is KtIfExpression) {
+                            super.visitKtElement(element)
+                        } else {
+                            complexity++
+                            nestAround { super.visitKtElement(element) }
+                        }
+                    }
+
+                    else ->
+                        super.visitKtElement(element)
+                }
+            } else {
+                super.visitKtElement(element)
+            }
         }
 
         override fun visitBreakExpression(expression: KtBreakExpression) {

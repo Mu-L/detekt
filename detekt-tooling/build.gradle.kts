@@ -1,13 +1,13 @@
 plugins {
     id("module")
-    alias(libs.plugins.binaryCompatibilityValidator)
+    id("public-api")
 }
 
 dependencies {
     api(projects.detektApi)
+    testImplementation(projects.detektTest)
     testImplementation(projects.detektTestUtils)
-    testImplementation(libs.bundles.testImplementation)
-    testRuntimeOnly(libs.spek.runner)
+    testImplementation(libs.assertj.core)
 }
 
 apiValidation {

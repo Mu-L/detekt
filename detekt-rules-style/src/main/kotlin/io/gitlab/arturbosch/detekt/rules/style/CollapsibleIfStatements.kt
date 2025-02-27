@@ -1,12 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.psi.KtContainerNodeForControlStructureBody
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtIfExpression
@@ -34,19 +31,15 @@ import org.jetbrains.kotlin.psi.psiUtil.getChildrenOfType
  * }
  * </compliant>
  */
-class CollapsibleIfStatements(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "CollapsibleIfStatements",
-        Severity.Style,
-        "Two if statements which could be collapsed were detected. " +
-            "These statements can be merged to improve readability.",
-        Debt.FIVE_MINS
-    )
+class CollapsibleIfStatements(config: Config) : Rule(
+    config,
+    "Two if statements which could be collapsed were detected. " +
+        "These statements can be merged to improve readability."
+) {
 
     override fun visitIfExpression(expression: KtIfExpression) {
         if (isNotElseIfOrElse(expression) && hasOneKtIfExpression(expression)) {
-            report(CodeSmell(issue, Entity.from(expression), issue.description))
+            report(Finding(Entity.from(expression), description))
         }
         super.visitIfExpression(expression)
     }

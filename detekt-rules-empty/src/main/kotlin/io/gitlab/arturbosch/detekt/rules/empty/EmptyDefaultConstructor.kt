@@ -1,9 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.empty
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
+import io.gitlab.arturbosch.detekt.api.Finding
 import org.jetbrains.kotlin.lexer.KtModifierKeywordToken
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtClass
@@ -23,7 +23,7 @@ class EmptyDefaultConstructor(config: Config) : EmptyRule(config = config) {
             isNotCalled(constructor) &&
             !isExpectedOrActualClass(constructor)
         ) {
-            report(CodeSmell(issue, Entity.from(constructor), "An empty default constructor can be removed."))
+            report(Finding(Entity.from(constructor), "An empty default constructor can be removed."))
         }
     }
 
@@ -43,13 +43,11 @@ class EmptyDefaultConstructor(config: Config) : EmptyRule(config = config) {
             constructor.annotationEntries.isEmpty() &&
             constructor.valueParameters.isEmpty()
 
-    private fun hasPublicVisibility(visibility: KtModifierKeywordToken?): Boolean {
-        return visibility == null || visibility == KtTokens.PUBLIC_KEYWORD
-    }
+    private fun hasPublicVisibility(visibility: KtModifierKeywordToken?): Boolean =
+        visibility == null || visibility == KtTokens.PUBLIC_KEYWORD
 
-    private fun isNotCalled(constructor: KtPrimaryConstructor): Boolean {
-        return constructor.getContainingClassOrObject().secondaryConstructors.none {
+    private fun isNotCalled(constructor: KtPrimaryConstructor): Boolean =
+        constructor.getContainingClassOrObject().secondaryConstructors.none {
             it.getDelegationCall().isCallToThis && it.getDelegationCall().valueArguments.isEmpty()
         }
-    }
 }

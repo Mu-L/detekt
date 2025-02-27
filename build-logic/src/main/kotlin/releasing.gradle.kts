@@ -1,50 +1,78 @@
-import com.vdurmont.semver4j.Semver
+import org.semver4j.Semver
 
 plugins {
     id("com.github.breadmoirai.github-release")
-    id("io.codearte.nexus-staging")
+    id("io.github.gradle-nexus.publish-plugin")
 }
 
-nexusStaging {
+nexusPublishing {
     packageGroup = "io.gitlab.arturbosch"
-    stagingProfileId = "1d8efc8232c5c"
-    username = findProperty("sonatypeUsername")
-        ?.toString()
-        ?: System.getenv("MAVEN_CENTRAL_USER")
-    password = findProperty("sonatypePassword")
-        ?.toString()
-        ?: System.getenv("MAVEN_CENTRAL_PW")
+
+    repositories {
+        create("sonatype") {
+            username = providers.environmentVariable("ORG_GRADLE_PROJECT_SONATYPE_USERNAME")
+            password = providers.environmentVariable("ORG_GRADLE_PROJECT_SONATYPE_PASSWORD")
+        }
+    }
 }
 
-project.afterEvaluate {
-    githubRelease {
-        token(project.findProperty("github.token") as? String ?: "")
-        owner.set("detekt")
-        repo.set("detekt")
-        overwrite.set(true)
-        dryRun.set(false)
-        targetCommitish.set("main")
-        body {
-            var changelog = project.file("docs/pages/changelog 1.x.x.md").readText()
-            val nextNonBetaVersion = project.version.toString().substringBeforeLast("-")
+val releaseArtifacts: Configuration by configurations.dependencyScope("releaseArtifacts")
+val releaseAssetFiles by configurations.resolvable("releaseAssetFiles") {
+    extendsFrom(releaseArtifacts)
+}
+
+val version = Versions.currentOrSnapshot()
+
+githubRelease {
+    token(providers.gradleProperty("github.token"))
+    owner = "detekt"
+    repo = "detekt"
+    overwrite = true
+    dryRun = false
+    draft = true
+    prerelease = true
+    targetCommitish = "main"
+    body =
+        provider {
+            var changelog = project.file("website/src/pages/changelog.md").readText()
+            val nextNonBetaVersion = version
             val sectionStart = "#### $nextNonBetaVersion"
-            changelog = changelog.substring(changelog.indexOf(sectionStart) + sectionStart.length)
-            changelog = changelog.substring(0, changelog.indexOf("#### 1."))
+            changelog = changelog.substring(changelog.indexOf(sectionStart))
+            changelog = changelog.substring(0, changelog.indexOf("#### 1.", changelog.indexOf(sectionStart) + 1))
             changelog.trim()
         }
-        val cliBuildDir = project(":detekt-cli").buildDir
-        releaseAssets.setFrom(
-            files(
-                cliBuildDir.resolve("libs/detekt-cli-${project.version}-all.jar"),
-                cliBuildDir.resolve("distributions/detekt-cli-${project.version}.zip"),
-                project(":detekt-formatting").buildDir.resolve("libs/detekt-formatting-${project.version}.jar")
-            )
-        )
+    releaseAssets.setFrom(releaseAssetFiles)
+}
+
+dependencies {
+    releaseArtifacts(project(":detekt-cli")) {
+        targetConfiguration = "shadow" // com.github.jengelman.gradle.plugins.shadow.ShadowBasePlugin.CONFIGURATION_NAME
+    }
+    releaseArtifacts(project(":detekt-cli")) {
+        targetConfiguration = "shadowDist"
+    }
+    releaseArtifacts(project(":detekt-generator")) {
+        targetConfiguration = "shadow" // com.github.jengelman.gradle.plugins.shadow.ShadowBasePlugin.CONFIGURATION_NAME
+    }
+    releaseArtifacts(project(":detekt-compiler-plugin")) {
+        targetConfiguration = "shadow" // com.github.jengelman.gradle.plugins.shadow.ShadowBasePlugin.CONFIGURATION_NAME
+    }
+    releaseArtifacts(project(":detekt-formatting")) {
+        targetConfiguration = Dependency.DEFAULT_CONFIGURATION
+        isTransitive = false
+    }
+    releaseArtifacts(project(":detekt-rules-libraries")) {
+        targetConfiguration = Dependency.DEFAULT_CONFIGURATION
+        isTransitive = false
+    }
+    releaseArtifacts(project(":detekt-rules-ruleauthors")) {
+        targetConfiguration = Dependency.DEFAULT_CONFIGURATION
+        isTransitive = false
     }
 }
 
 fun updateVersion(increment: (Semver) -> Semver) {
-    val versionsFile = file("${rootProject.rootDir}/build-logic/src/main/kotlin/Versions.kt")
+    val versionsFile = file("$rootDir/build-logic/src/main/kotlin/Versions.kt")
     val newContent = versionsFile.readLines()
         .joinToString("\n") {
             if (it.contains("const val DETEKT: String")) {
@@ -60,22 +88,52 @@ fun updateVersion(increment: (Semver) -> Semver) {
 }
 
 tasks {
-    register("incrementPatch") { doLast { updateVersion { it.nextPatch() } } }
-    register("incrementMinor") { doLast { updateVersion { it.nextMinor() } } }
-    register("incrementMajor") { doLast { updateVersion { it.nextMajor() } } }
+    register("incrementPatch") {
+        notCompatibleWithConfigurationCache("cannot serialize Gradle script object references")
+        doLast { updateVersion { it.nextPatch() } }
+    }
+    register("incrementMinor") {
+        notCompatibleWithConfigurationCache("cannot serialize Gradle script object references")
+        doLast { updateVersion { it.nextMinor() } }
+    }
+    register("incrementMajor") {
+        notCompatibleWithConfigurationCache("cannot serialize Gradle script object references")
+        doLast { updateVersion { it.nextMajor() } }
+    }
 
     register<UpdateVersionInFileTask>("applyDocVersion") {
-        fileToUpdate.set(file("${rootProject.rootDir}/docs/_config.yml"))
-        linePartToFind.set("detekt_version:")
-        lineTransformation.set("detekt_version: ${Versions.DETEKT}")
+        fileToUpdate = file("$rootDir/website/src/remark/detektVersionReplace.js")
+        linePartToFind = "const detektVersion = "
+        lineTransformation = "const detektVersion = \"${Versions.DETEKT}\";"
     }
+}
 
-    register<UpdateVersionInFileTask>("applySelfAnalysisVersion") {
-        fileToUpdate.set(file("${rootProject.rootDir}/gradle/libs.versions.toml"))
-        linePartToFind.set("detekt-gradle = \"io.gitlab.arturbosch.detekt:detekt-gradle-plugin")
-        lineTransformation.set(
-            "detekt-gradle = \"io.gitlab.arturbosch.detekt:" +
-                "detekt-gradle-plugin:${Versions.DETEKT}\""
-        )
+tasks.register("publishToMavenLocal") {
+    description = "Publish all the projects to Maven Local"
+    subprojects {
+        if (this.plugins.hasPlugin("packaging")) {
+            dependsOn(tasks.named("publishToMavenLocal"))
+        }
     }
+    dependsOn(gradle.includedBuild("detekt-gradle-plugin").task(":publishToMavenLocal"))
+}
+
+tasks.register("publishAllToSonatypeSnapshot") {
+    description = "Publish all the projects to Sonatype Snapshot Repository"
+    subprojects {
+        if (this.plugins.hasPlugin("publishing")) {
+            dependsOn(tasks.named("publishAllPublicationsToSonatypeSnapshotRepository"))
+        }
+    }
+    dependsOn(gradle.includedBuild("detekt-gradle-plugin").task(":publishAllPublicationsToSonatypeSnapshotRepository"))
+}
+
+tasks.register("publishAllToMavenCentral") {
+    description = "Publish all the projects to Sonatype Staging Repository"
+    subprojects {
+        if (this.plugins.hasPlugin("publishing")) {
+            dependsOn(tasks.named("publishAllPublicationsToMavenCentralRepository"))
+        }
+    }
+    dependsOn(gradle.includedBuild("detekt-gradle-plugin").task(":publishAllPublicationsToMavenCentralRepository"))
 }

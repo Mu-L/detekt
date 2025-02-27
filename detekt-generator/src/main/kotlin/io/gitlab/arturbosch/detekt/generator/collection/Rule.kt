@@ -6,12 +6,12 @@ data class Rule(
     val nonCompliantCodeExample: String,
     val compliantCodeExample: String,
     val defaultActivationStatus: DefaultActivationStatus,
-    var severity: String,
-    var debt: String,
-    var aliases: String?,
+    var aliases: List<String>,
     val parent: String,
-    val configuration: List<Configuration> = emptyList(),
+    val configurations: List<Configuration> = emptyList(),
     val autoCorrect: Boolean = false,
-    var inMultiRule: String? = null,
-    val requiresTypeResolution: Boolean = false
-)
+    val requiresFullAnalysis: Boolean = false,
+    val deprecationMessage: String? = null,
+) {
+    fun isDeprecated() = deprecationMessage != null
+}

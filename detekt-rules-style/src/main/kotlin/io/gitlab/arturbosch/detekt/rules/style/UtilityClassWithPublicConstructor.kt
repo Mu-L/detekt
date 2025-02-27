@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import io.gitlab.arturbosch.detekt.rules.isOpen
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtClassInitializer
@@ -58,15 +55,11 @@ import org.jetbrains.kotlin.psi.psiUtil.isPublic
  * </compliant>
  */
 @ActiveByDefault(since = "1.2.0")
-class UtilityClassWithPublicConstructor(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "The class declaration is unnecessary because it only contains utility functions. " +
-            "An object declaration should be used instead.",
-        Debt.FIVE_MINS
-    )
+class UtilityClassWithPublicConstructor(config: Config) : Rule(
+    config,
+    "The class declaration is unnecessary because it only contains utility functions. " +
+        "An object declaration should be used instead."
+) {
 
     override fun visitClass(klass: KtClass) {
         if (canBeCheckedForUtilityClass(klass)) {
@@ -75,8 +68,7 @@ class UtilityClassWithPublicConstructor(config: Config = Config.empty) : Rule(co
             if (hasOnlyUtilityClassMembers(declarations)) {
                 if (utilityClassConstructor.hasPublicConstructorWithoutParameters()) {
                     report(
-                        CodeSmell(
-                            issue,
+                        Finding(
                             Entity.from(klass),
                             "The class ${klass.nameAsSafeName} only contains" +
                                 " utility functions. Consider defining it as an object."
@@ -84,8 +76,7 @@ class UtilityClassWithPublicConstructor(config: Config = Config.empty) : Rule(co
                     )
                 } else if (klass.isOpen() && utilityClassConstructor.hasNonPublicConstructorWithoutParameters()) {
                     report(
-                        CodeSmell(
-                            issue,
+                        Finding(
                             Entity.from(klass),
                             "The utility class ${klass.nameAsSafeName} should be final."
                         )
@@ -96,12 +87,11 @@ class UtilityClassWithPublicConstructor(config: Config = Config.empty) : Rule(co
         super.visitClass(klass)
     }
 
-    private fun canBeCheckedForUtilityClass(klass: KtClass): Boolean {
-        return !klass.isInterface() &&
+    private fun canBeCheckedForUtilityClass(klass: KtClass): Boolean =
+        !klass.isInterface() &&
             !klass.superTypeListEntries.any() &&
             !klass.isAnnotation() &&
             !klass.isSealed()
-    }
 
     private fun hasOnlyUtilityClassMembers(declarations: List<KtDeclaration>?): Boolean {
         if (declarations.isNullOrEmpty()) {

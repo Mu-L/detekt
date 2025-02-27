@@ -3,7 +3,6 @@
 package io.gitlab.arturbosch.detekt.generator
 
 import com.beust.jcommander.JCommander
-import java.nio.file.Files
 import kotlin.system.exitProcess
 
 @Suppress("detekt.SpreadOperator")
@@ -17,8 +16,15 @@ fun main(args: Array<String>) {
         exitProcess(0)
     }
 
-    require(Files.isDirectory(options.documentationPath)) { "Documentation path must be a directory." }
-    require(Files.isDirectory(options.configPath)) { "Config path must be a directory." }
-
-    Generator(options).execute()
+    val generator = Generator(
+        inputPaths = options.inputPath,
+        textReplacements = options.textReplacements,
+        documentationPath = options.documentationPath,
+        configPath = options.configPath,
+    )
+    if (options.generateCustomRuleConfig) {
+        generator.executeCustomRuleConfig()
+    } else {
+        generator.execute()
+    }
 }

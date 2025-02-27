@@ -1,63 +1,40 @@
 package io.gitlab.arturbosch.detekt.core.rules
 
-import io.github.detekt.psi.absolutePath
 import io.github.detekt.tooling.api.spec.RulesSpec
-import io.gitlab.arturbosch.detekt.api.BaseRule
-import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Finding
-import io.gitlab.arturbosch.detekt.api.MultiRule
-import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.RuleId
-import io.gitlab.arturbosch.detekt.api.RuleSet
-import io.gitlab.arturbosch.detekt.api.RuleSetId
 import io.gitlab.arturbosch.detekt.api.RuleSetProvider
-import io.gitlab.arturbosch.detekt.api.internal.createPathFilters
+import io.gitlab.arturbosch.detekt.api.internal.DefaultRuleSetProvider
 import io.gitlab.arturbosch.detekt.core.ProcessingSettings
-import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.resolve.BindingContext
+import io.gitlab.arturbosch.detekt.core.extensions.LIST_ITEM_SPACING
+import io.gitlab.arturbosch.detekt.core.extractRuleName
+import java.util.ServiceLoader
 
-fun Config.isActive(): Boolean =
-    valueOrDefault(Config.ACTIVE_KEY, true)
+fun ProcessingSettings.createRuleProviders(): List<RuleSetProvider> {
+    val ruleSetProviders = ServiceLoader.load(RuleSetProvider::class.java, pluginLoader)
+        .filterNot { it.ruleSetId.value in spec.extensionsSpec.disabledExtensions }
 
-fun Config.shouldAnalyzeFile(file: KtFile): Boolean {
-    val filters = createPathFilters()
-    return filters == null || !filters.isIgnored(file.absolutePath())
-}
+    return when (val runPolicy = spec.rulesSpec.runPolicy) {
+        RulesSpec.RunPolicy.NoRestrictions -> ruleSetProviders
 
-fun RuleSet.visitFile(
-    file: KtFile,
-    bindingContext: BindingContext = BindingContext.EMPTY
-): List<Finding> =
-    rules.flatMap {
-        it.visitFile(file, bindingContext)
-        it.findings
-    }
+        RulesSpec.RunPolicy.DisableDefaultRuleSets ->
+            ruleSetProviders
+                .filterNot { it is DefaultRuleSetProvider }
 
-fun associateRuleIdsToRuleSetIds(ruleSets: Sequence<RuleSet>): Map<RuleId, RuleSetId> {
-    fun extractIds(rule: BaseRule) =
-        if (rule is MultiRule) {
-            rule.rules.asSequence().map(Rule::ruleId)
-        } else {
-            sequenceOf(rule.ruleId)
-        }
-    return ruleSets.flatMap { ruleSet ->
-        ruleSet.rules
-            .asSequence()
-            .flatMap { rule ->
-                extractIds(rule).map { ruleId ->
-                    ruleId to ruleSet.id
-                }
+        is RulesSpec.RunPolicy.RestrictToSingleRule -> {
+            val ruleSetId = runPolicy.ruleSetId
+            val ruleId = runPolicy.ruleId
+            val realProvider = requireNotNull(ruleSetProviders.find { it.ruleSetId == ruleSetId }) {
+                "There was no rule set with id '$ruleSetId'."
             }
-    }.toMap()
-}
-
-fun ProcessingSettings.createRuleProviders(): List<RuleSetProvider> = when (val runPolicy = spec.rulesSpec.runPolicy) {
-    RulesSpec.RunPolicy.NoRestrictions -> RuleSetLocator(this).load()
-    is RulesSpec.RunPolicy.RestrictToSingleRule -> {
-        val (ruleSetId, ruleId) = runPolicy.id
-        val realProvider = requireNotNull(
-            RuleSetLocator(this).load().find { it.ruleSetId == ruleSetId }
-        ) { "There was no rule set with id '$ruleSetId'." }
-        listOf(SingleRuleProvider(ruleId, realProvider))
+            val ruleName = requireNotNull(extractRuleName(ruleId)) {
+                "There was not rule '$ruleId' in rule set '$ruleSetId'."
+            }
+            listOf(SingleRuleProvider(ruleName, realProvider))
+        }
     }
+        .also {
+            debug {
+                "Registered rule sets: $LIST_ITEM_SPACING" +
+                    it.joinToString(LIST_ITEM_SPACING) { it.javaClass.canonicalName }
+            }
+        }
 }

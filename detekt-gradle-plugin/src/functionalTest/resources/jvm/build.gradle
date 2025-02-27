@@ -1,0 +1,13 @@
+plugins {
+    id("org.jetbrains.kotlin.jvm")
+    id("io.gitlab.arturbosch.detekt")
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+tasks.detektMain {
+    exclude("**/Callee.kt")
+}

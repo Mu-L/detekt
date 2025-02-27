@@ -1,29 +1,25 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
-import io.gitlab.arturbosch.detekt.rules.IT_LITERAL
-import io.gitlab.arturbosch.detekt.rules.LET_LITERAL
 import io.gitlab.arturbosch.detekt.rules.firstParameter
+import io.gitlab.arturbosch.detekt.rules.isCalling
 import io.gitlab.arturbosch.detekt.rules.receiverIsUsed
-import org.jetbrains.kotlin.com.intellij.psi.PsiElement
-import org.jetbrains.kotlin.descriptors.CallableDescriptor
-import org.jetbrains.kotlin.descriptors.impl.ValueParameterDescriptorImpl
-import org.jetbrains.kotlin.psi.KtBlockExpression
+import org.jetbrains.kotlin.builtins.StandardNames.IMPLICIT_LAMBDA_PARAMETER_NAME
+import org.jetbrains.kotlin.descriptors.impl.ValueParameterDescriptorImpl.WithDestructuringDeclaration
+import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtCallExpression
-import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
+import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtLambdaExpression
+import org.jetbrains.kotlin.psi.KtNamedDeclaration
+import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.psi.KtSafeQualifiedExpression
 import org.jetbrains.kotlin.psi.KtSimpleNameExpression
 import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
 
 /**
  * `let` expressions are used extensively in our code for null-checking and chaining functions,
@@ -47,93 +43,95 @@ import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
  * </compliant>
  *
  */
-@RequiresTypeResolution
-class UnnecessaryLet(config: Config) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "The `let` usage is unnecessary",
-        Debt.FIVE_MINS
-    )
+class UnnecessaryLet(config: Config) :
+    Rule(
+        config,
+        "The `let` usage is unnecessary."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitCallExpression(expression: KtCallExpression) {
         super.visitCallExpression(expression)
 
-        if (bindingContext == BindingContext.EMPTY) return
+        if (!expression.isCalling(letFqName, bindingContext)) return
+        val lambdaExpr = expression.lambdaArguments.firstOrNull()?.getLambdaExpression()
 
-        if (!expression.isLetExpr()) return
+        val referenceCount = lambdaExpr?.countLambdaParameterReference(bindingContext) ?: 0
+        if (referenceCount > 1) return
 
-        val lambdaExpr = expression.firstLambdaArg
+        if (expression.parent is KtSafeQualifiedExpression) {
+            if (lambdaExpr != null) {
+                when {
+                    referenceCount == 0 && !expression.receiverIsUsed(bindingContext) ->
+                        report(expression, "let expression can be replaced with a simple if")
 
-        val isNullSafeOperator = expression.parent is KtSafeQualifiedExpression
-
-        if (lambdaExpr == null) {
-            if (!isNullSafeOperator) {
-                report(CodeSmell(issue, Entity.from(expression), "let expression can be omitted"))
+                    referenceCount == 1 && canBeReplacedWithCall(lambdaExpr) ->
+                        report(expression, "let expression can be omitted")
+                }
             }
         } else {
-            val lambdaReferenceCount = lambdaExpr.countReferences(bindingContext)
-            if (lambdaReferenceCount == 0 && !expression.receiverIsUsed(bindingContext) && isNullSafeOperator) {
-                report(
-                    CodeSmell(
-                        issue,
-                        Entity.from(expression),
-                        "let expression can be replaces with a simple if"
-                    )
-                )
-            } else if (lambdaReferenceCount <= 1 && !isNullSafeOperator) {
-                report(CodeSmell(issue, Entity.from(expression), "let expression can be omitted"))
-            } else if (lambdaReferenceCount == 1 && canBeReplacedWithCall(lambdaExpr)) {
-                report(CodeSmell(issue, Entity.from(expression), "let expression can be omitted"))
+            if (referenceCount == 0 || canBeReplacedWithCall(lambdaExpr) || !expression.inCallChains()) {
+                report(expression, "let expression can be omitted")
             }
         }
     }
+
+    private fun report(expression: KtCallExpression, message: String) {
+        report(Finding(Entity.from(expression), message))
+    }
+
+    companion object {
+        private val letFqName = FqName("kotlin.let")
+    }
+}
+
+private fun KtCallExpression.inCallChains(): Boolean {
+    val qualified = parent as? KtQualifiedExpression ?: return false
+    return qualified.parent is KtQualifiedExpression || qualified.receiverExpression is KtQualifiedExpression
 }
 
 private fun canBeReplacedWithCall(lambdaExpr: KtLambdaExpression?): Boolean {
-    val lambdaParameter = lambdaExpr?.firstParameter
-    val lambdaBody = lambdaExpr?.bodyExpression
+    if (lambdaExpr == null) return false
 
-    if (lambdaBody?.hasOnlyOneStatement() != true) return false
-
-    val exprReceiver = when (val firstExpr = lambdaBody.firstChild) {
-        is KtDotQualifiedExpression -> firstExpr.receiverExpression
-        is KtSafeQualifiedExpression -> firstExpr.receiverExpression
+    val receiver = when (val statement = lambdaExpr.bodyExpression?.statements?.singleOrNull()) {
+        is KtQualifiedExpression -> statement.getRootExpression()
         else -> null
-    }
+    } ?: return false
 
-    return when {
-        exprReceiver == null -> false
-        lambdaParameter == null -> exprReceiver.textMatches(IT_LITERAL)
-        else -> {
-            val destructuringDeclaration = lambdaParameter.destructuringDeclaration
-            destructuringDeclaration?.entries?.any { exprReceiver.textMatches(it.nameAsSafeName.asString()) }
-                ?: exprReceiver.textMatches(lambdaParameter.nameAsSafeName.asString())
-        }
+    val lambdaParameter = lambdaExpr.valueParameters.singleOrNull()
+    val lambdaParameterNames = if (lambdaParameter == null) {
+        listOf(IMPLICIT_LAMBDA_PARAMETER_NAME)
+    } else {
+        lambdaParameter.destructuringDeclaration?.entries.orEmpty()
+            .plus(lambdaParameter)
+            .filterIsInstance<KtNamedDeclaration>()
+            .map { it.nameAsSafeName }
     }
+    return lambdaParameterNames.any { receiver.textMatches(it.asString()) }
 }
 
-private fun KtCallExpression.isLetExpr() = calleeExpression?.textMatches(LET_LITERAL) == true
+private fun KtExpression?.getRootExpression(): KtExpression? {
+    // Look for the expression that was the root of a potential call chain.
+    var receiverExpression = this
+    while (receiverExpression is KtQualifiedExpression) {
+        receiverExpression = receiverExpression.receiverExpression
+    }
+    return receiverExpression
+}
 
-private val KtCallExpression.firstLambdaArg get() = lambdaArguments.firstOrNull()?.getLambdaExpression()
-
-private val KtLambdaExpression.firstParameter get() = valueParameters.firstOrNull()
-
-private fun KtBlockExpression.hasOnlyOneStatement() = this.children.size == 1
-
-private fun PsiElement.countVarRefs(parameter: CallableDescriptor, context: BindingContext): Int =
-    collectDescendantsOfType<KtSimpleNameExpression> {
-        it.getResolvedCall(context)?.resultingDescriptor == parameter
-    }.count()
-
-private fun KtLambdaExpression.countReferences(context: BindingContext): Int {
+private fun KtLambdaExpression.countLambdaParameterReference(context: BindingContext): Int {
     val bodyExpression = bodyExpression ?: return 0
     val firstParameter = firstParameter(context) ?: return 0
 
-    return if (firstParameter is ValueParameterDescriptorImpl.WithDestructuringDeclaration) {
-        firstParameter.destructuringVariables.sumOf { bodyExpression.countVarRefs(it, context) }
+    val parameters = if (firstParameter is WithDestructuringDeclaration) {
+        firstParameter.destructuringVariables
     } else {
-        bodyExpression.countVarRefs(firstParameter, context)
+        listOf(firstParameter)
+    }
+
+    return parameters.sumOf { parameter ->
+        bodyExpression.collectDescendantsOfType<KtSimpleNameExpression> {
+            context[BindingContext.REFERENCE_TARGET, it] == parameter
+        }.count()
     }
 }

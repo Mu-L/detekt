@@ -1,24 +1,22 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.test.compileAndLint
+import io.gitlab.arturbosch.detekt.test.lint
 import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Test
 
-class ExplicitGarbageCollectionCallSpec : Spek({
-    val subject by memoized { ExplicitGarbageCollectionCall(Config.empty) }
+class ExplicitGarbageCollectionCallSpec {
+    private val subject = ExplicitGarbageCollectionCall(Config.empty)
 
-    describe("ExplicitGarbageCollectionCall rule") {
-
-        it("reports garbage collector calls") {
-            val code = """
-                fun f() {
-                    System.gc()
-                    Runtime.getRuntime().gc()
-                    System.runFinalization()
-                }"""
-            assertThat(subject.compileAndLint(code)).hasSize(3)
-        }
+    @Test
+    fun `reports garbage collector calls`() {
+        val code = """
+            fun f() {
+                System.gc()
+                Runtime.getRuntime().gc()
+                System.runFinalization()
+            }
+        """.trimIndent()
+        assertThat(subject.lint(code)).hasSize(3)
     }
-})
+}

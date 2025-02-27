@@ -1,11 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.empty
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import org.jetbrains.kotlin.com.intellij.psi.impl.source.tree.LeafPsiElement
-import org.jetbrains.kotlin.lexer.KtSingleValueToken
+import io.gitlab.arturbosch.detekt.api.Finding
 import org.jetbrains.kotlin.psi.KtIfExpression
 
 /**
@@ -13,16 +11,15 @@ import org.jetbrains.kotlin.psi.KtIfExpression
  */
 @ActiveByDefault(since = "1.0.0")
 class EmptyIfBlock(config: Config) : EmptyRule(config) {
-
     override fun visitIfExpression(expression: KtIfExpression) {
         super.visitIfExpression(expression)
-        expression.then?.addFindingIfBlockExprIsEmpty() ?: checkThenBodyForLoneSemicolon(expression)
-    }
-
-    private fun checkThenBodyForLoneSemicolon(expression: KtIfExpression) {
-        val valueOfNextSibling = (expression.nextSibling as? LeafPsiElement)?.elementType as? KtSingleValueToken
-        if (valueOfNextSibling?.value?.trim() == ";") {
-            report(CodeSmell(issue, Entity.from(expression), "This if block is empty and can be removed."))
+        expression.then?.addFindingIfBlockExprIsEmpty() ?: checkThenBodyForLoneSemicolon(expression) {
+            report(
+                Finding(
+                    Entity.from(it),
+                    "This if block is empty and can be removed."
+                )
+            )
         }
     }
 }

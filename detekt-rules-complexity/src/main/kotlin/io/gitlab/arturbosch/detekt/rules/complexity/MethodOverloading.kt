@@ -1,16 +1,12 @@
 package io.gitlab.arturbosch.detekt.rules.complexity
 
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.DetektVisitor
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
-import io.gitlab.arturbosch.detekt.api.Metric
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.ThresholdedCodeSmell
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import io.gitlab.arturbosch.detekt.rules.isOverride
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtEnumEntry
@@ -26,45 +22,39 @@ import org.jetbrains.kotlin.psi.psiUtil.isExtensionDeclaration
  *
  * Refactor these methods and try to use optional parameters instead to prevent some of the overloading.
  */
-class MethodOverloading(config: Config = Config.empty) : Rule(config) {
+class MethodOverloading(config: Config) : Rule(
+    config,
+    "Methods which are overloaded often might be harder to maintain. " +
+        "Furthermore, these methods are tightly coupled. " +
+        "Refactor these methods and try to use optional parameters."
+) {
 
-    override val issue = Issue(
-        "MethodOverloading",
-        Severity.Maintainability,
-        "Methods which are overloaded often might be harder to maintain. " +
-            "Furthermore, these methods are tightly coupled. " +
-            "Refactor these methods and try to use optional parameters.",
-        Debt.TWENTY_MINS
-    )
-
-    @Configuration("number of overloads which will trigger the rule")
-    private val threshold: Int by config(defaultValue = 6)
+    @Configuration("The allowed number of overloads for a method.")
+    private val allowedOverloads: Int by config(defaultValue = 6)
 
     override fun visitKtFile(file: KtFile) {
         val visitor = OverloadedMethodVisitor()
         file.getChildrenOfType<KtNamedFunction>().forEach { visitor.visitMethod(it) }
-        visitor.reportIfThresholdExceeded(Entity.atPackageOrFirstDecl(file))
+        visitor.reportIfAllowedNumberExceeded(Entity.atPackageOrFirstDecl(file))
         super.visitKtFile(file)
     }
 
     override fun visitClassOrObject(classOrObject: KtClassOrObject) {
         val visitor = OverloadedMethodVisitor()
         classOrObject.accept(visitor)
-        visitor.reportIfThresholdExceeded(Entity.atName(classOrObject))
+        visitor.reportIfAllowedNumberExceeded(Entity.atName(classOrObject))
         super.visitClassOrObject(classOrObject)
     }
 
     internal inner class OverloadedMethodVisitor : DetektVisitor() {
 
-        private var methods = HashMap<String, Int>()
+        private val methods = HashMap<String, Int>()
 
-        fun reportIfThresholdExceeded(entity: Entity) {
-            for ((name, value) in methods.filterValues { it >= threshold }) {
+        fun reportIfAllowedNumberExceeded(entity: Entity) {
+            for ((name, value) in methods.filterValues { it > allowedOverloads }) {
                 report(
-                    ThresholdedCodeSmell(
-                        issue,
+                    Finding(
                         entity,
-                        Metric("OVERLOAD SIZE: ", value, threshold),
                         message = "The method '$name' is overloaded $value times."
                     )
                 )

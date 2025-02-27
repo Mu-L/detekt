@@ -1,10 +1,20 @@
+config:
+  warningsAsErrors: true
+  checkExhaustiveness: false
+processors:
+  active: true
+console-reports:
+  active: true
+output-reports:
+  active: true
+
 complexity:
   LongMethod:
     active: true
-    threshold: 20
+    allowedLines: 20
   LongParameterList:
     active: false
-    functionThreshold: 5
+    allowedFunctionParameters: 4
   LargeClass:
     active: false
     threshold: 70
@@ -15,6 +25,7 @@ complexity:
       active: true
 
 style:
+  active: true
   WildcardImport:
     active: true
   NoElseInWhenExpression:
@@ -24,4 +35,5 @@ style:
     ignoreNumbers: ['-1', '0', '1', '2']
 
 comments:
-  active: false
+  CommentOverPrivateProperty:
+    active: false

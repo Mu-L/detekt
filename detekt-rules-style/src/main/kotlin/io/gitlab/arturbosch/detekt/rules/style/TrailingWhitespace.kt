@@ -1,52 +1,68 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.github.detekt.psi.absolutePath
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.Location
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
+import io.gitlab.arturbosch.detekt.api.SourceLocation
+import io.gitlab.arturbosch.detekt.api.TextLocation
 import io.gitlab.arturbosch.detekt.rules.isPartOfString
+import org.jetbrains.kotlin.KtPsiSourceFileLinesMapping
+import org.jetbrains.kotlin.com.intellij.openapi.util.TextRange
+import org.jetbrains.kotlin.com.intellij.psi.PsiElement
+import org.jetbrains.kotlin.diagnostics.DiagnosticUtils.getLineAndColumnRangeInPsiFile
+import org.jetbrains.kotlin.psi.KtFile
 
 /**
  * This rule reports lines that end with a whitespace.
+ *
+ * Note: in KDoc comments we use Markdown, so two spaces at the end of lines should be allowed.
+ * However, JetBrains haven't implemented this in their flavour of "standard" Markdown yet
+ * ([in Dokka](https://github.com/Kotlin/dokka/issues/2823),
+ * nor [in KTIJ](https://youtrack.jetbrains.com/issue/KTIJ-6702/KDoc-Dokka-allow-for-newlines-line-breaks-inside-paragraphs)),
+ * which means Markdown line-breaks in KDoc are really only trailing whitespace for now.
  */
-class TrailingWhitespace(config: Config = Config.empty) : Rule(config) {
+class TrailingWhitespace(config: Config) : Rule(
+    config,
+    "Whitespaces at the end of a line are unnecessary and can be removed."
+) {
 
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Checks which lines end with a whitespace.",
-        Debt.FIVE_MINS
-    )
+    override fun visitKtFile(file: KtFile) {
+        super.visitKtFile(file)
 
-    fun visit(fileContent: KtFileContent) {
-        var offset = 0
-        fileContent.content.forEachIndexed { index, line ->
-            offset += line.length
+        val sourceFileLinesMapping = KtPsiSourceFileLinesMapping(file)
+
+        file.text.lineSequence().forEachIndexed { index, line ->
             val trailingWhitespaces = countTrailingWhitespace(line)
             if (trailingWhitespaces > 0) {
-                val file = fileContent.file
-                val ktElement = findFirstKtElementInParents(file, offset, line)
+                val lineEndOffset = sourceFileLinesMapping.getLineStartOffset(index) + line.length
+                val ktElement = findFirstKtElementInParentsOrNull(file, lineEndOffset, line)
                 if (ktElement == null || !ktElement.isPartOfString()) {
-                    val entity = Entity.from(file, offset - trailingWhitespaces).let { entity ->
-                        entity.copy(
-                            location = entity.location.copy(
-                                text = entity.location.text.copy(end = offset)
-                            )
+                    val startOffset = lineEndOffset - trailingWhitespaces
+                    val textRange = TextRange(startOffset, lineEndOffset)
+                    val lineAndColumnRange = getLineAndColumnRangeInPsiFile(file, textRange)
+                    val location =
+                        Location(
+                            source = SourceLocation(lineAndColumnRange.start.line, lineAndColumnRange.start.column),
+                            endSource = SourceLocation(lineAndColumnRange.end.line, lineAndColumnRange.end.column),
+                            text = TextLocation(startOffset, lineEndOffset),
+                            path = file.absolutePath(),
                         )
-                    }
-                    report(CodeSmell(issue, entity, createMessage(index)))
+
+                    report(Finding(Entity.from(file, location), createMessage(index)))
                 }
             }
-            offset += 1 /* '\n' */
         }
     }
 
-    private fun countTrailingWhitespace(line: String): Int {
-        return line.length - line.indexOfLast { it != ' ' && it != '\t' } - 1
-    }
+    private fun countTrailingWhitespace(line: String): Int =
+        line.length - line.indexOfLast { it != ' ' && it != '\t' } - 1
 
     private fun createMessage(line: Int) = "Line ${line + 1} ends with a whitespace."
+
+    private fun findFirstKtElementInParentsOrNull(file: KtFile, offset: Int, line: String): PsiElement? =
+        findKtElementInParents(file, offset, line)
+            .firstOrNull()
 }

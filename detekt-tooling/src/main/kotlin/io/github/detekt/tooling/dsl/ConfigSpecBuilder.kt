@@ -7,8 +7,7 @@ import java.nio.file.Path
 @ProcessingModelDsl
 class ConfigSpecBuilder : Builder<ConfigSpec> {
 
-    var shouldValidateBeforeAnalysis: Boolean = true
-    var knownPatterns: Collection<String> = emptyList()
+    var shouldValidateBeforeAnalysis: Boolean? = null
 
     var useDefaultConfig: Boolean = false // false to be backwards compatible in 1.X
     var resources: Collection<URL> = emptyList()
@@ -16,7 +15,6 @@ class ConfigSpecBuilder : Builder<ConfigSpec> {
 
     override fun build(): ConfigSpec = ConfigModel(
         shouldValidateBeforeAnalysis,
-        knownPatterns,
         useDefaultConfig,
         resources,
         configPaths
@@ -24,9 +22,8 @@ class ConfigSpecBuilder : Builder<ConfigSpec> {
 }
 
 private data class ConfigModel(
-    override val shouldValidateBeforeAnalysis: Boolean,
-    override val knownPatterns: Collection<String>,
+    override val shouldValidateBeforeAnalysis: Boolean?,
     override val useDefaultConfig: Boolean,
     override val resources: Collection<URL>,
-    override val configPaths: Collection<Path>
+    override val configPaths: Collection<Path>,
 ) : ConfigSpec

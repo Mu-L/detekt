@@ -1,25 +1,28 @@
 package io.gitlab.arturbosch.detekt.rules.style.optional
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.rules.isOverride
 import org.jetbrains.kotlin.cfg.WhenChecker
+import org.jetbrains.kotlin.config.AnalysisFlags
+import org.jetbrains.kotlin.config.ExplicitApiMode
 import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtIfExpression
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
+import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.psi.KtWhenExpression
+import org.jetbrains.kotlin.psi.psiUtil.isPublic
 import org.jetbrains.kotlin.psi.psiUtil.siblings
-import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.bindingContextUtil.isUsedAsExpression
-import org.jetbrains.kotlin.resolve.calls.callUtil.getType
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getType
 import org.jetbrains.kotlin.types.typeUtil.isNothing
+import org.jetbrains.kotlin.types.typeUtil.isTypeParameter
 import org.jetbrains.kotlin.types.typeUtil.isUnit
 import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstanceOrNull
 
@@ -46,18 +49,17 @@ import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstanceOrNull
  * override fun foo() = Unit
  * </compliant>
  */
-class OptionalUnit(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Return type of 'Unit' is unnecessary and can be safely removed.",
-        Debt.FIVE_MINS
-    )
+class OptionalUnit(config: Config) :
+    Rule(
+        config,
+        "Return type of `Unit` is unnecessary and can be safely removed."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitNamedFunction(function: KtNamedFunction) {
-        if (function.hasDeclaredReturnType()) {
-            checkFunctionWithExplicitReturnType(function)
+        val typeReference = function.typeReference
+        if (typeReference != null) {
+            checkFunctionWithExplicitReturnType(function, typeReference)
         } else if (!function.isOverride()) {
             checkFunctionWithInferredReturnType(function)
         }
@@ -71,7 +73,7 @@ class OptionalUnit(config: Config = Config.empty) : Rule(config) {
             .filter {
                 when {
                     it !is KtNameReferenceExpression || it.text != UNIT -> false
-                    it != lastStatement || bindingContext == BindingContext.EMPTY -> true
+                    it != lastStatement -> true
                     !it.isUsedAsExpression(bindingContext) -> true
                     else -> {
                         val prev =
@@ -82,50 +84,62 @@ class OptionalUnit(config: Config = Config.empty) : Rule(config) {
             }
             .onEach {
                 report(
-                    CodeSmell(
-                        issue,
+                    Finding(
                         Entity.from(expression),
-                        "A single Unit expression is unnecessary and can safely be removed"
+                        "A single Unit expression is unnecessary and can safely be removed."
                     )
                 )
             }
         super.visitBlockExpression(expression)
     }
 
-    private fun KtExpression.canBeUsedAsValue(): Boolean {
-        return when (this) {
+    private fun KtExpression.canBeUsedAsValue(): Boolean =
+        when (this) {
             is KtIfExpression -> {
                 val elseExpression = `else`
                 if (elseExpression is KtIfExpression) elseExpression.canBeUsedAsValue() else elseExpression != null
             }
+
             is KtWhenExpression ->
                 entries.lastOrNull()?.elseKeyword != null || WhenChecker.getMissingCases(this, bindingContext).isEmpty()
+
             else ->
                 true
         }
+
+    private fun isExplicitApiModeActive(): Boolean {
+        val flag = compilerResources.languageVersionSettings.getFlag(AnalysisFlags.explicitApiMode)
+        return flag != ExplicitApiMode.DISABLED
     }
 
-    private fun checkFunctionWithExplicitReturnType(function: KtNamedFunction) {
-        val typeReference = function.typeReference
-        val typeElementText = typeReference?.typeElement?.text
+    private fun checkFunctionWithExplicitReturnType(function: KtNamedFunction, typeReference: KtTypeReference) {
+        val typeElementText = typeReference.typeElement?.text
         if (typeElementText == UNIT) {
-            if (function.initializer.isNothingType()) return
-            report(CodeSmell(issue, Entity.from(typeReference), createMessage(function)))
+            val initializer = function.initializer
+            if (initializer?.isGenericOrNothingType() == true) return
+            // case when explicit api is on so in case of expression body we need Unit
+            if (initializer != null && isExplicitApiModeActive() && function.isPublic) return
+            report(Finding(Entity.from(typeReference), createMessage(function)))
         }
     }
 
     private fun checkFunctionWithInferredReturnType(function: KtNamedFunction) {
         val referenceExpression = function.bodyExpression as? KtNameReferenceExpression
         if (referenceExpression != null && referenceExpression.text == UNIT) {
-            report(CodeSmell(issue, Entity.from(referenceExpression), createMessage(function)))
+            report(Finding(Entity.from(referenceExpression), createMessage(function)))
         }
     }
 
     private fun createMessage(function: KtNamedFunction) = "The function ${function.name} " +
         "defines a return type of Unit. This is unnecessary and can safely be removed."
 
-    private fun KtExpression?.isNothingType() =
-        bindingContext != BindingContext.EMPTY && this?.getType(bindingContext)?.isNothing() == true
+    private fun KtExpression.isGenericOrNothingType(): Boolean {
+        val isGenericType = getResolvedCall(bindingContext)?.candidateDescriptor?.returnType?.isTypeParameter() == true
+        val isNothingType = getType(bindingContext)?.isNothing() == true
+        // Either the function initializer returns Nothing or it is a generic function
+        // into which Unit is passed, but not both.
+        return (isGenericType && !isNothingType) || (isNothingType && !isGenericType)
+    }
 
     companion object {
         private const val UNIT = "Unit"

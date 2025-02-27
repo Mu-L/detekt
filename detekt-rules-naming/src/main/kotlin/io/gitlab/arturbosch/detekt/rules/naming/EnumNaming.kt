@@ -1,40 +1,33 @@
 package io.gitlab.arturbosch.detekt.rules.naming
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
+import io.gitlab.arturbosch.detekt.api.Alias
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
-import io.gitlab.arturbosch.detekt.rules.identifierName
 import org.jetbrains.kotlin.psi.KtEnumEntry
 
 /**
  * Reports enum names that do not follow the specified naming convention.
  */
 @ActiveByDefault(since = "1.0.0")
-class EnumNaming(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "Enum names should follow the naming convention set in the projects configuration.",
-        debt = Debt.FIVE_MINS
-    )
+@Alias("EnumEntryName")
+class EnumNaming(config: Config) : Rule(
+    config,
+    "Enum names should follow the naming convention set in detekt's configuration."
+) {
 
     @Configuration("naming pattern")
     private val enumEntryPattern: Regex by config("[A-Z][_a-zA-Z0-9]*") { it.toRegex() }
 
     override fun visitEnumEntry(enumEntry: KtEnumEntry) {
-        if (!enumEntry.identifierName().matches(enumEntryPattern)) {
+        if (enumEntry.name?.matches(enumEntryPattern) != true) {
             report(
-                CodeSmell(
-                    issue,
-                    Entity.from(enumEntry.nameIdentifier ?: enumEntry),
+                Finding(
+                    Entity.atName(enumEntry),
                     message = "Enum entry names should match the pattern: $enumEntryPattern"
                 )
             )

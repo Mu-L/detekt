@@ -1,71 +1,72 @@
 package io.gitlab.arturbosch.detekt.internal
 
+import dev.detekt.gradle.plugin.internal.conventionCompat
 import io.gitlab.arturbosch.detekt.Detekt
 import io.gitlab.arturbosch.detekt.DetektCreateBaselineTask
 import io.gitlab.arturbosch.detekt.extensions.DetektExtension
+import org.gradle.api.JavaVersion
 import org.gradle.api.Project
-import org.gradle.api.tasks.TaskProvider
+import org.gradle.api.plugins.JavaBasePlugin
+import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.jvm.toolchain.JavaToolchainService
 
-internal fun Project.registerDetektTask(
-    name: String,
-    extension: DetektExtension,
-    configuration: Detekt.() -> Unit
-): TaskProvider<Detekt> =
-    tasks.register(name, Detekt::class.java) {
-        with(extension.reports) {
-            if (xml.outputLocation.isPresent) {
-                logger.warn(
-                    "XML report location set on detekt {} extension will be ignored for $name task. See " +
-                        "https://detekt.github.io/detekt/gradle.html#reports"
-                )
-            }
-            if (sarif.outputLocation.isPresent) {
-                logger.warn(
-                    "SARIF report location set on detekt {} extension will be ignored for $name task. See " +
-                        "https://detekt.github.io/detekt/gradle.html#reports"
-                )
-            }
-            if (txt.outputLocation.isPresent) {
-                logger.warn(
-                    "TXT report location set on detekt {} extension will be ignored for $name task. See " +
-                        "https://detekt.github.io/detekt/gradle.html#reports"
-                )
-            }
-            if (html.outputLocation.isPresent) {
-                logger.warn(
-                    "HTML report location set on detekt {} extension will be ignored for $name task. See " +
-                        "https://detekt.github.io/detekt/gradle.html#reports"
-                )
-            }
+internal fun Project.setDetektTaskDefaults(extension: DetektExtension) {
+    tasks.withType(Detekt::class.java) {
+        project.plugins.withType(JavaBasePlugin::class.java) { _ ->
+            val toolchain = project.extensions.getByType(JavaPluginExtension::class.java).toolchain
+
+            // acquire a provider that returns the launcher for the toolchain
+            val service = project.extensions.getByType(JavaToolchainService::class.java)
+            val defaultLauncher = service.launcherFor(toolchain)
+            it.jdkHome.convention(defaultLauncher.map { launcher -> launcher.metadata.installationPath })
+            it.jvmTarget.convention(
+                defaultLauncher.map { launcher ->
+                    JavaVersion.toVersion(launcher.metadata.languageVersion.asInt()).toString()
+                }
+            )
         }
 
-        it.debugProp.set(provider { extension.debug })
-        it.parallelProp.set(provider { extension.parallel })
-        it.disableDefaultRuleSetsProp.set(provider { extension.disableDefaultRuleSets })
-        it.buildUponDefaultConfigProp.set(provider { extension.buildUponDefaultConfig })
-        it.failFastProp.set(provider { @Suppress("DEPRECATION") extension.failFast })
-        it.autoCorrectProp.set(provider { extension.autoCorrect })
-        it.config.setFrom(provider { extension.config })
-        it.ignoreFailuresProp.set(project.provider { extension.ignoreFailures })
-        it.basePathProp.set(extension.basePath)
-        it.allRulesProp.set(provider { extension.allRules })
-        configuration(it)
+        it.debug.convention(extension.debug)
+        it.parallel.convention(extension.parallel)
+        it.disableDefaultRuleSets.convention(extension.disableDefaultRuleSets)
+        it.buildUponDefaultConfig.convention(extension.buildUponDefaultConfig)
+        it.autoCorrect.convention(extension.autoCorrect)
+        it.ignoreFailures.convention(extension.ignoreFailures)
+        it.failOnSeverity.convention(extension.failOnSeverity)
+        it.config.conventionCompat(provider { extension.config })
+        it.basePath.convention(extension.basePath.map { basePath -> basePath.asFile.absolutePath })
+        it.allRules.convention(extension.allRules)
+        it.noJdk.convention(false)
+        it.multiPlatformEnabled.convention(false)
     }
+}
 
-internal fun Project.registerCreateBaselineTask(
-    name: String,
-    extension: DetektExtension,
-    configuration: DetektCreateBaselineTask.() -> Unit
-): TaskProvider<DetektCreateBaselineTask> =
-    tasks.register(name, DetektCreateBaselineTask::class.java) {
-        it.config.setFrom(project.provider { extension.config })
-        it.debug.set(project.provider { extension.debug })
-        it.parallel.set(project.provider { extension.parallel })
-        it.disableDefaultRuleSets.set(project.provider { extension.disableDefaultRuleSets })
-        it.buildUponDefaultConfig.set(project.provider { extension.buildUponDefaultConfig })
-        @Suppress("DEPRECATION") it.failFast.set(project.provider { extension.failFast })
-        it.autoCorrect.set(project.provider { extension.autoCorrect })
-        it.basePathProp.set(extension.basePath)
-        it.allRules.set(provider { extension.allRules })
-        configuration(it)
+internal fun Project.setCreateBaselineTaskDefaults(extension: DetektExtension) {
+    tasks.withType(DetektCreateBaselineTask::class.java) {
+        project.plugins.withType(JavaBasePlugin::class.java) { _ ->
+            val toolchain = project.extensions.getByType(JavaPluginExtension::class.java).toolchain
+
+            // acquire a provider that returns the launcher for the toolchain
+            val service = project.extensions.getByType(JavaToolchainService::class.java)
+            val defaultLauncher = service.launcherFor(toolchain)
+            it.jdkHome.convention(defaultLauncher.map { launcher -> launcher.metadata.installationPath })
+            it.jvmTarget.convention(
+                defaultLauncher.map { launcher ->
+                    JavaVersion.toVersion(launcher.metadata.languageVersion.asInt()).toString()
+                }
+            )
+        }
+
+        it.config.conventionCompat(project.provider { extension.config })
+        it.debug.convention(extension.debug)
+        it.parallel.convention(extension.parallel)
+        it.disableDefaultRuleSets.convention(extension.disableDefaultRuleSets)
+        it.buildUponDefaultConfig.convention(extension.buildUponDefaultConfig)
+        it.autoCorrect.convention(extension.autoCorrect)
+        it.ignoreFailures.convention(extension.ignoreFailures)
+        it.basePath.convention(extension.basePath.map { basePath -> basePath.asFile.absolutePath })
+        it.allRules.convention(extension.allRules)
+        it.noJdk.convention(false)
+        it.multiPlatformEnabled.convention(false)
     }
+}

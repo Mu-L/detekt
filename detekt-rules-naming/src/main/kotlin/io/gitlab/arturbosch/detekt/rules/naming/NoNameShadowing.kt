@@ -1,13 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.naming
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import io.gitlab.arturbosch.detekt.rules.hasImplicitParameterReference
 import io.gitlab.arturbosch.detekt.rules.implicitParameter
 import org.jetbrains.kotlin.diagnostics.Errors
@@ -17,7 +15,6 @@ import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
-import org.jetbrains.kotlin.resolve.BindingContext
 
 /**
  * Disallows shadowing variable declarations.
@@ -48,14 +45,13 @@ import org.jetbrains.kotlin.resolve.BindingContext
  * </compliant>
  *
  */
-@RequiresTypeResolution
-class NoNameShadowing(config: Config = Config.empty) : Rule(config) {
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Defect,
-        "Disallows shadowing variable declarations.",
-        Debt.FIVE_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class NoNameShadowing(config: Config) :
+    Rule(
+        config,
+        "Disallow shadowing variable declarations."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitProperty(property: KtProperty) {
         super.visitProperty(property)
@@ -74,23 +70,19 @@ class NoNameShadowing(config: Config = Config.empty) : Rule(config) {
 
     private fun checkNameShadowing(declaration: KtNamedDeclaration) {
         val nameIdentifier = declaration.nameIdentifier ?: return
-        if (bindingContext != BindingContext.EMPTY &&
-            bindingContext.diagnostics.forElement(declaration).any { it.factory == Errors.NAME_SHADOWING }
-        ) {
-            report(CodeSmell(issue, Entity.from(nameIdentifier), "Name shadowed: ${nameIdentifier.text}"))
+        if (bindingContext.diagnostics.forElement(declaration).any { it.factory == Errors.NAME_SHADOWING }) {
+            report(Finding(Entity.from(nameIdentifier), "Name shadowed: ${nameIdentifier.text}"))
         }
     }
 
     override fun visitLambdaExpression(lambdaExpression: KtLambdaExpression) {
         super.visitLambdaExpression(lambdaExpression)
-        if (bindingContext == BindingContext.EMPTY) return
         val implicitParameter = lambdaExpression.implicitParameter(bindingContext) ?: return
         if (lambdaExpression.hasImplicitParameterReference(implicitParameter, bindingContext) &&
             lambdaExpression.hasParentImplicitParameterLambda()
         ) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.from(lambdaExpression),
                     "Name shadowed: implicit lambda parameter 'it'"
                 )
