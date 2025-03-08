@@ -1,216 +1,237 @@
 package io.gitlab.arturbosch.detekt.core.suppressors
 
-import io.github.detekt.psi.FilePath
 import io.github.detekt.test.utils.compileContentForTest
-import io.gitlab.arturbosch.detekt.api.CodeSmell
-import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.ConfigAware
-import io.gitlab.arturbosch.detekt.api.Debt
-import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Finding
-import io.gitlab.arturbosch.detekt.api.Issue
-import io.gitlab.arturbosch.detekt.api.Location
-import io.gitlab.arturbosch.detekt.api.RuleId
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.SourceLocation
-import io.gitlab.arturbosch.detekt.api.TextLocation
-import io.gitlab.arturbosch.detekt.test.TestConfig
+import io.gitlab.arturbosch.detekt.rules.KotlinCoreEnvironmentTest
+import io.gitlab.arturbosch.detekt.test.createBindingContext
 import org.assertj.core.api.Assertions.assertThat
+import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.psi.KtClass
-import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFunction
 import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.psi.psiUtil.findDescendantOfType
 import org.jetbrains.kotlin.psi.psiUtil.findFunctionByName
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
-import java.nio.file.Paths
+import org.jetbrains.kotlin.resolve.BindingContext
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
-class AnnotationSuppressorSpec : Spek({
+@KotlinCoreEnvironmentTest
+class AnnotationSuppressorSpec(private val env: KotlinCoreEnvironment) {
 
-    describe("AnnotationSuppressorFactory") {
-        it("Factory returns null if ignoreAnnotated is not set") {
-            val suppressor = annotationSuppressorFactory(buildConfigAware(/* empty */))
+    @Nested
+    inner class AnnotationSuppressorFactory {
+        @Test
+        fun `Factory returns null if ignoreAnnotated is not set`() {
+            val suppressor = annotationSuppressorFactory(buildRule(), BindingContext.EMPTY)
 
             assertThat(suppressor).isNull()
         }
 
-        it("Factory returns null if ignoreAnnotated is set to empty") {
+        @Test
+        fun `Factory returns null if ignoreAnnotated is set to empty`() {
             val suppressor = annotationSuppressorFactory(
-                buildConfigAware("ignoreAnnotated" to emptyList<String>())
+                buildRule("ignoreAnnotated" to emptyList<String>()),
+                BindingContext.EMPTY,
             )
 
             assertThat(suppressor).isNull()
         }
 
-        it("Factory returns not null if ignoreAnnotated is set to a not empty list") {
+        @Test
+        fun `Factory returns not null if ignoreAnnotated is set to a not empty list`() {
             val suppressor = annotationSuppressorFactory(
-                buildConfigAware("ignoreAnnotated" to listOf("Composable"))
+                buildRule("ignoreAnnotated" to listOf("Composable")),
+                BindingContext.EMPTY,
             )
 
             assertThat(suppressor).isNotNull()
         }
     }
 
-    describe("AnnotationSuppressor") {
-        val suppressor by memoized {
-            annotationSuppressorFactory(buildConfigAware("ignoreAnnotated" to listOf("Composable")))!!
+    @Nested
+    inner class AnnotationSuppressor {
+        val suppressor = annotationSuppressorFactory(
+            buildRule("ignoreAnnotated" to listOf("Composable")),
+            BindingContext.EMPTY,
+        )!!
+
+        @Test
+        fun `If KtElement is null it returns false`() {
+            assertThat(suppressor.shouldSuppress(buildFinding(element = null))).isFalse()
         }
 
-        it("If KtElement is null it returns false") {
-            assertThat(suppressor(buildFinding(element = null))).isFalse()
-        }
-
-        context("If annotation is at file level") {
-            val root by memoized {
-                compileContentForTest(
-                    """
+        @Nested
+        inner class `If annotation is at file level` {
+            val root = compileContentForTest(
+                """
                     @file:Composable
-
+                    
+                    import androidx.compose.runtime.Composable
+                    
                     class OneClass {
                         fun function(parameter: String) {
                             val a = 0
                         }
                     }
-
+                    
                     fun topLevelFunction() = Unit
-                    """.trimIndent()
-                )
+                """.trimIndent()
+            )
+
+            @Test
+            fun `If reports root it returns true`() {
+                assertThat(suppressor.shouldSuppress(buildFinding(element = root))).isTrue()
             }
 
-            it("If reports root it returns true") {
-                assertThat(suppressor(buildFinding(element = root))).isTrue()
-            }
-
-            it("If reports class it returns true") {
+            @Test
+            fun `If reports class it returns true`() {
                 val ktClass = root.findChildByClass(KtClass::class.java)!!
 
-                assertThat(suppressor(buildFinding(element = ktClass))).isTrue()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktClass))).isTrue()
             }
 
-            it("If reports function in class it returns true") {
+            @Test
+            fun `If reports function in class it returns true`() {
                 val ktFunction = root.findChildByClass(KtClass::class.java)!!
                     .findFunctionByName("function")!!
 
-                assertThat(suppressor(buildFinding(element = ktFunction))).isTrue()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktFunction))).isTrue()
             }
 
-            it("If reports parameter in function in class it returns true") {
+            @Test
+            fun `If reports parameter in function in class it returns true`() {
                 val ktParameter = root.findChildByClass(KtClass::class.java)!!
                     .findFunctionByName("function")!!
                     .findDescendantOfType<KtParameter>()!!
 
-                assertThat(suppressor(buildFinding(element = ktParameter))).isTrue()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktParameter))).isTrue()
             }
 
-            it("If reports top level function it returns true") {
+            @Test
+            fun `If reports top level function it returns true`() {
                 val ktFunction = root.findChildByClass(KtFunction::class.java)!!
 
-                assertThat(suppressor(buildFinding(element = ktFunction))).isTrue()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktFunction))).isTrue()
             }
         }
 
-        context("If annotation is at function level") {
-            val root by memoized {
-                compileContentForTest(
-                    """
+        @Nested
+        inner class `If annotation is at function level` {
+            val root = compileContentForTest(
+                """
+                    import androidx.compose.runtime.Composable
+                    
                     class OneClass {
                         @Composable
                         fun function(parameter: String) {
                             val a = 0
                         }
                     }
-
+                    
                     fun topLevelFunction() = Unit
-                    """.trimIndent()
-                )
+                """.trimIndent()
+            )
+
+            @Test
+            fun `If reports root it returns false`() {
+                assertThat(suppressor.shouldSuppress(buildFinding(element = root))).isFalse()
             }
 
-            it("If reports root it returns false") {
-                assertThat(suppressor(buildFinding(element = root))).isFalse()
-            }
-
-            it("If reports class it returns false") {
+            @Test
+            fun `If reports class it returns false`() {
                 val ktClass = root.findChildByClass(KtClass::class.java)!!
 
-                assertThat(suppressor(buildFinding(element = ktClass))).isFalse()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktClass))).isFalse()
             }
 
-            it("If reports function in class it returns true") {
+            @Test
+            fun `If reports function in class it returns true`() {
                 val ktFunction = root.findChildByClass(KtClass::class.java)!!
                     .findFunctionByName("function")!!
 
-                assertThat(suppressor(buildFinding(element = ktFunction))).isTrue()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktFunction))).isTrue()
             }
 
-            it("If reports parameter in function in class it returns true") {
+            @Test
+            fun `If reports parameter in function in class it returns true`() {
                 val ktParameter = root.findChildByClass(KtClass::class.java)!!
                     .findFunctionByName("function")!!
                     .findDescendantOfType<KtParameter>()!!
 
-                assertThat(suppressor(buildFinding(element = ktParameter))).isTrue()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktParameter))).isTrue()
             }
 
-            it("If reports top level function it returns false") {
+            @Test
+            fun `If reports top level function it returns false`() {
                 val ktFunction = root.findChildByClass(KtFunction::class.java)!!
 
-                assertThat(suppressor(buildFinding(element = ktFunction))).isFalse()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktFunction))).isFalse()
             }
         }
 
-        context("If there is not annotations") {
-            val root by memoized {
-                compileContentForTest(
-                    """
+        @Nested
+        inner class `If there is not annotations` {
+            val root = compileContentForTest(
+                """
+                    import androidx.compose.runtime.Composable
+                    
                     class OneClass {
                         fun function(parameter: String) {
                             val a = 0
                         }
                     }
-
+                    
                     fun topLevelFunction() = Unit
-                    """.trimIndent()
-                )
+                """.trimIndent()
+            )
+
+            @Test
+            fun `If reports root it returns false`() {
+                assertThat(suppressor.shouldSuppress(buildFinding(element = root))).isFalse()
             }
 
-            it("If reports root it returns false") {
-                assertThat(suppressor(buildFinding(element = root))).isFalse()
-            }
-
-            it("If reports class it returns false") {
+            @Test
+            fun `If reports class it returns false`() {
                 val ktClass = root.findChildByClass(KtClass::class.java)!!
 
-                assertThat(suppressor(buildFinding(element = ktClass))).isFalse()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktClass))).isFalse()
             }
 
-            it("If reports function in class it returns false") {
+            @Test
+            fun `If reports function in class it returns false`() {
                 val ktFunction = root.findChildByClass(KtClass::class.java)!!
                     .findFunctionByName("function")!!
 
-                assertThat(suppressor(buildFinding(element = ktFunction))).isFalse()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktFunction))).isFalse()
             }
 
-            it("If reports parameter in function in class it returns false") {
+            @Test
+            fun `If reports parameter in function in class it returns false`() {
                 val ktParameter = root.findChildByClass(KtClass::class.java)!!
                     .findFunctionByName("function")!!
                     .findDescendantOfType<KtParameter>()!!
 
-                assertThat(suppressor(buildFinding(element = ktParameter))).isFalse()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktParameter))).isFalse()
             }
 
-            it("If reports top level function it returns false") {
+            @Test
+            fun `If reports top level function it returns false`() {
                 val ktFunction = root.findChildByClass(KtFunction::class.java)!!
 
-                assertThat(suppressor(buildFinding(element = ktFunction))).isFalse()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktFunction))).isFalse()
             }
         }
 
-        context("If there are other annotations") {
-            val root by memoized {
-                compileContentForTest(
-                    """
+        @Nested
+        inner class `If there are other annotations` {
+            val root = compileContentForTest(
+                """
                     @file:A
-
+                    
+                    import androidx.compose.runtime.Composable
+                    
                     @B
                     class OneClass {
                         @Composable
@@ -219,63 +240,285 @@ class AnnotationSuppressorSpec : Spek({
                             val a = 0
                         }
                     }
-
+                    
                     @E
                     fun topLevelFunction() = Unit
-                    """.trimIndent()
-                )
+                """.trimIndent()
+            )
+
+            @Test
+            fun `If reports root it returns false`() {
+                assertThat(suppressor.shouldSuppress(buildFinding(element = root))).isFalse()
             }
 
-            it("If reports root it returns false") {
-                assertThat(suppressor(buildFinding(element = root))).isFalse()
-            }
-
-            it("If reports class it returns false") {
+            @Test
+            fun `If reports class it returns false`() {
                 val ktClass = root.findChildByClass(KtClass::class.java)!!
 
-                assertThat(suppressor(buildFinding(element = ktClass))).isFalse()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktClass))).isFalse()
             }
 
-            it("If reports function in class it returns true") {
+            @Test
+            fun `If reports function in class it returns true`() {
                 val ktFunction = root.findChildByClass(KtClass::class.java)!!
                     .findFunctionByName("function")!!
 
-                assertThat(suppressor(buildFinding(element = ktFunction))).isTrue()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktFunction))).isTrue()
             }
 
-            it("If reports parameter in function in class it returns true") {
+            @Test
+            fun `If reports parameter in function in class it returns true`() {
                 val ktParameter = root.findChildByClass(KtClass::class.java)!!
                     .findFunctionByName("function")!!
                     .findDescendantOfType<KtParameter>()!!
 
-                assertThat(suppressor(buildFinding(element = ktParameter))).isTrue()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktParameter))).isTrue()
             }
 
-            it("If reports top level function it returns false") {
+            @Test
+            fun `If reports top level function it returns false`() {
                 val ktFunction = root.findChildByClass(KtFunction::class.java)!!
 
-                assertThat(suppressor(buildFinding(element = ktFunction))).isFalse()
+                assertThat(suppressor.shouldSuppress(buildFinding(element = ktFunction))).isFalse()
             }
         }
     }
-})
 
-private fun buildFinding(element: KtElement?): Finding = CodeSmell(
-    issue = Issue("RuleName", Severity.CodeSmell, "", Debt.FIVE_MINS),
-    entity = element?.let { Entity.from(element) } ?: buildEmptyEntity(),
-    message = "",
-)
+    @Nested
+    inner class `Full Qualified names` {
+        val composableFiles = arrayOf(
+            compileContentForTest(
+                """
+                    package androidx.compose.runtime
+                    
+                    annotation class Composable
+                """.trimIndent()
+            ),
+            compileContentForTest(
+                """
+                    package foo.bar
+                    
+                    annotation class Composable
+                """.trimIndent()
+            ),
+        )
 
-private fun buildEmptyEntity(): Entity = Entity(
-    name = "",
-    signature = "",
-    location = Location(SourceLocation(0, 0), TextLocation(0, 0), FilePath.fromAbsolute(Paths.get("/"))),
-    ktElement = null,
-)
+        @Nested
+        inner class `general cases` {
+            val root = compileContentForTest(
+                """
+                    package foo.bar
+                    
+                    import androidx.compose.runtime.Composable
+                    
+                    @Composable
+                    fun function() = Unit
+                """.trimIndent()
+            )
 
-private fun buildConfigAware(
-    vararg pairs: Pair<String, Any>
-) = object : ConfigAware {
-    override val ruleId: RuleId = "ruleId"
-    override val ruleSetConfig: Config = TestConfig(*pairs)
+            val bindings = listOf(
+                env.createBindingContext(listOf(root, *composableFiles)),
+                BindingContext.EMPTY,
+            )
+
+            @ParameterizedTest
+            @MethodSource("getBindings")
+            fun `Just name`(binding: BindingContext) {
+                val suppressor = annotationSuppressorFactory(
+                    buildRule("ignoreAnnotated" to listOf("Composable")),
+                    binding,
+                )!!
+
+                val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+                assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+            }
+
+            @ParameterizedTest
+            @MethodSource("getBindings")
+            fun `Full qualified name name`(binding: BindingContext) {
+                val suppressor = annotationSuppressorFactory(
+                    buildRule("ignoreAnnotated" to listOf("androidx.compose.runtime.Composable")),
+                    binding,
+                )!!
+
+                val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+                assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+            }
+
+            @ParameterizedTest
+            @MethodSource("getBindings")
+            @DisplayName("with glob doesn't match because * doesn't match .")
+            fun withGlobDoesntMatch(binding: BindingContext) {
+                val suppressor = annotationSuppressorFactory(
+                    buildRule("ignoreAnnotated" to listOf("*.Composable")),
+                    binding,
+                )!!
+
+                val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+                assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isFalse()
+            }
+
+            @ParameterizedTest
+            @MethodSource("getBindings")
+            fun `With glob2`(binding: BindingContext) {
+                val suppressor = annotationSuppressorFactory(
+                    buildRule("ignoreAnnotated" to listOf("**.Composable")),
+                    binding,
+                )!!
+
+                val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+                assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+            }
+
+            @ParameterizedTest
+            @MethodSource("getBindings")
+            fun `With glob3`(binding: BindingContext) {
+                val suppressor = annotationSuppressorFactory(
+                    buildRule("ignoreAnnotated" to listOf("Compo*")),
+                    binding,
+                )!!
+
+                val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+                assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+            }
+
+            @ParameterizedTest
+            @MethodSource("getBindings")
+            fun `With glob4`(binding: BindingContext) {
+                val suppressor = annotationSuppressorFactory(
+                    buildRule("ignoreAnnotated" to listOf("*")),
+                    binding,
+                )!!
+
+                val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+                assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+            }
+        }
+
+        @Test
+        fun `Doesn't mix annotations`() {
+            val root = compileContentForTest(
+                """
+                    package foo.bar
+                    
+                    @Composable
+                    fun function() = Unit
+                """.trimIndent()
+            )
+
+            val suppressor = annotationSuppressorFactory(
+                buildRule("ignoreAnnotated" to listOf("androidx.compose.runtime.Composable")),
+                env.createBindingContext(listOf(root, *composableFiles)),
+            )!!
+
+            val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+            assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isFalse()
+        }
+
+        @Test
+        fun `Works when no using imports`() {
+            val root = compileContentForTest(
+                """
+                    package foo.bar
+                    
+                    @androidx.compose.runtime.Composable
+                    fun function() = Unit
+                """.trimIndent()
+            )
+
+            val suppressor = annotationSuppressorFactory(
+                buildRule("ignoreAnnotated" to listOf("androidx.compose.runtime.Composable")),
+                env.createBindingContext(listOf(root, *composableFiles)),
+            )!!
+
+            val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+            assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+        }
+
+        @Test
+        fun `Works when using import alias`() {
+            val root = compileContentForTest(
+                """
+                    package foo.bar
+                    
+                    import androidx.compose.runtime.Composable as Bar
+                    
+                    @Bar
+                    fun function() = Unit
+                """.trimIndent()
+            )
+
+            val suppressor = annotationSuppressorFactory(
+                buildRule("ignoreAnnotated" to listOf("androidx.compose.runtime.Composable")),
+                env.createBindingContext(listOf(root, *composableFiles)),
+            )!!
+
+            val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+            assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+        }
+    }
+
+    @Nested
+    inner class `Annotation with parameters` {
+        val composableFiles = arrayOf(
+            compileContentForTest(
+                """
+                    package androidx.compose.runtime
+                    
+                    annotation class Composable
+                """.trimIndent()
+            ),
+            compileContentForTest(
+                """
+                    package androidx.compose.ui.tooling.preview
+                    
+                    annotation class Preview(showBackground: Boolean = true)
+                """.trimIndent()
+            ),
+        )
+
+        val root = compileContentForTest(
+            """
+                import androidx.compose.runtime.Composable
+                import androidx.compose.ui.tooling.preview.Preview
+                
+                @Composable
+                @Preview(showBackground = true)
+                fun function() = Unit
+            """.trimIndent()
+        )
+
+        @Test
+        fun `suppress if it has parameters with type solving`() {
+            val suppressor = annotationSuppressorFactory(
+                buildRule("ignoreAnnotated" to listOf("Preview")),
+                env.createBindingContext(listOf(root, *composableFiles)),
+            )!!
+
+            val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+            assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+        }
+
+        @Test
+        fun `suppress if it has parameters without type solving`() {
+            val suppressor = annotationSuppressorFactory(
+                buildRule("ignoreAnnotated" to listOf("Preview")),
+                BindingContext.EMPTY,
+            )!!
+
+            val ktFunction = root.findChildByClass(KtFunction::class.java)!!
+
+            assertThat(suppressor.shouldSuppress(buildFinding(ktFunction))).isTrue()
+        }
+    }
 }

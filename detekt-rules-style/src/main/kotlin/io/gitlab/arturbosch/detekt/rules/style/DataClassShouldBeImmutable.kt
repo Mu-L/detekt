@@ -1,12 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.psi.KtClass
 
@@ -29,15 +26,11 @@ import org.jetbrains.kotlin.psi.KtClass
  * )
  * </compliant>
  */
-class DataClassShouldBeImmutable(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        "DataClassShouldBeImmutable",
-        Severity.Style,
-        "Data classes should mainly be immutable and should not have any side effects. " +
-            "(To copy an object altering some of its properties use the copy function)",
-        Debt.TWENTY_MINS
-    )
+class DataClassShouldBeImmutable(config: Config) : Rule(
+    config,
+    "Data classes should mainly be immutable and should not have any side effects " +
+        "(To copy an object altering some of its properties use the copy function)."
+) {
 
     override fun visitClass(klass: KtClass) {
         if (klass.isData()) {
@@ -54,8 +47,7 @@ class DataClassShouldBeImmutable(config: Config = Config.empty) : Rule(config) {
 
     private fun report(element: PsiElement, className: String?, propertyName: String?) {
         report(
-            CodeSmell(
-                issue,
+            Finding(
                 Entity.from(element),
                 "The data class $className contains a mutable property. " +
                     "The offending property is called $propertyName"

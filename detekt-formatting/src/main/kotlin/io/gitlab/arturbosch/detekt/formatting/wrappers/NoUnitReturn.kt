@@ -1,18 +1,20 @@
 package io.gitlab.arturbosch.detekt.formatting.wrappers
 
-import com.pinterest.ktlint.ruleset.standard.NoUnitReturnRule
+import com.pinterest.ktlint.ruleset.standard.rules.NoUnitReturnRule
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.internal.AutoCorrectable
 import io.gitlab.arturbosch.detekt.formatting.FormattingRule
 
 /**
- * See <a href="https://ktlint.github.io/#rule-unit-return">ktlint-website</a> for documentation.
+ * See [ktlint docs](https://pinterest.github.io/ktlint/<ktlintVersion/>/rules/standard/#no-unit-as-return-type) for documentation.
  */
 @ActiveByDefault(since = "1.0.0")
 @AutoCorrectable(since = "1.0.0")
-class NoUnitReturn(config: Config) : FormattingRule(config) {
+class NoUnitReturn(config: Config) : FormattingRule(
+    config,
+    "Detects optional 'Unit' return types"
+) {
 
     override val wrapping = NoUnitReturnRule()
-    override val issue = issueFor("Detects optional 'Unit' return types")
 }

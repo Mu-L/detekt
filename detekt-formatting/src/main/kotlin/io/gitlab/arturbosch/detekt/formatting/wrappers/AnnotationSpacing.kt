@@ -1,17 +1,20 @@
 package io.gitlab.arturbosch.detekt.formatting.wrappers
 
-import com.pinterest.ktlint.ruleset.experimental.AnnotationSpacingRule
+import com.pinterest.ktlint.ruleset.standard.rules.AnnotationSpacingRule
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.internal.AutoCorrectable
 import io.gitlab.arturbosch.detekt.formatting.FormattingRule
 
 /**
- * See <a href="https://ktlint.github.io">ktlint-website</a> for documentation.
+ * See [ktlint docs](https://pinterest.github.io/ktlint/<ktlintVersion/>/rules/standard/#annotation-spacing) for documentation.
  */
 @AutoCorrectable(since = "1.0.0")
-class AnnotationSpacing(config: Config) : FormattingRule(config) {
+@ActiveByDefault(since = "1.22.0")
+class AnnotationSpacing(config: Config) : FormattingRule(
+    config,
+    "There should not be empty lines between an annotation and the object that it's annotating"
+) {
 
     override val wrapping = AnnotationSpacingRule()
-    override val issue =
-        issueFor("There should not be empty lines between an annotation and the object that it's annotating")
 }

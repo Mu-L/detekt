@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.style.optional
 
 import io.github.detekt.metrics.linesOfCode
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.com.intellij.psi.PsiWhiteSpace
 import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtDoWhileExpression
@@ -15,9 +12,6 @@ import org.jetbrains.kotlin.psi.KtForExpression
 import org.jetbrains.kotlin.psi.KtLoopExpression
 import org.jetbrains.kotlin.psi.KtWhileExpression
 import org.jetbrains.kotlin.psi.psiUtil.siblings
-
-private const val DESCRIPTION = "Multi-line loop was found that does not have braces. " +
-    "These should be added to improve readability."
 
 /**
  * This rule detects multi-line `for` and `while` loops which do not have braces.
@@ -55,8 +49,11 @@ private const val DESCRIPTION = "Multi-line loop was found that does not have br
  * do println("Hello, world") while (true)
  * </compliant>
  */
-class MandatoryBracesLoops(config: Config = Config.empty) : Rule(config) {
-    override val issue = Issue("MandatoryBracesLoops", Severity.Style, DESCRIPTION, Debt.FIVE_MINS)
+class MandatoryBracesLoops(config: Config) : Rule(
+    config,
+    "A multi-line loop was found that does not have braces. " +
+        "These should be added to improve readability."
+) {
 
     override fun visitForExpression(expression: KtForExpression) {
         checkForBraces(expression)
@@ -79,9 +76,10 @@ class MandatoryBracesLoops(config: Config = Config.empty) : Rule(config) {
             val hasNoBraces = expression.rightParenthesis
                 ?.siblings(forward = true, withItself = false)
                 ?.filterIsInstance<PsiWhiteSpace>()
-                ?.firstOrNull { it.textContains('\n') } != null
+                ?.any { it.textContains('\n') }
+                ?: false
             if (hasNoBraces) {
-                report(CodeSmell(issue, Entity.from(expression.body ?: expression), message = DESCRIPTION))
+                report(Finding(Entity.from(expression.body ?: expression), description))
             }
         }
     }
@@ -92,9 +90,9 @@ class MandatoryBracesLoops(config: Config = Config.empty) : Rule(config) {
             val hasNoBraces = expression.siblings(forward = true, withItself = false)
                 .takeWhile { it != expression.whileKeyword }
                 .filterIsInstance<PsiWhiteSpace>()
-                .firstOrNull { it.textContains('\n') } != null
+                .any { it.textContains('\n') }
             if (hasNoBraces) {
-                report(CodeSmell(issue, Entity.from(expression.body ?: expression), message = DESCRIPTION))
+                report(Finding(Entity.from(expression.body ?: expression), description))
             }
         }
     }

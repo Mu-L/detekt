@@ -1,27 +1,48 @@
+public final class io/github/detekt/tooling/api/AnalysisMode : java/lang/Enum {
+	public static final field full Lio/github/detekt/tooling/api/AnalysisMode;
+	public static final field light Lio/github/detekt/tooling/api/AnalysisMode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/detekt/tooling/api/AnalysisMode;
+	public static fun values ()[Lio/github/detekt/tooling/api/AnalysisMode;
+}
+
 public abstract interface class io/github/detekt/tooling/api/AnalysisResult {
 	public abstract fun getContainer ()Lio/gitlab/arturbosch/detekt/api/Detektion;
 	public abstract fun getError ()Lio/github/detekt/tooling/api/DetektError;
 }
 
-public final class io/github/detekt/tooling/api/AnalysisResultKt {
-	public static final fun exitCode (Lio/github/detekt/tooling/api/AnalysisResult;)I
+public abstract interface class io/github/detekt/tooling/api/Baseline {
+	public abstract fun contains (Ljava/lang/String;)Z
+	public abstract fun getCurrentIssues ()Ljava/util/Set;
+	public abstract fun getManuallySuppressedIssues ()Ljava/util/Set;
+}
+
+public abstract interface class io/github/detekt/tooling/api/BaselineProvider {
+	public static final field Companion Lio/github/detekt/tooling/api/BaselineProvider$Companion;
+	public abstract fun of (Ljava/util/Set;Ljava/util/Set;)Lio/github/detekt/tooling/api/Baseline;
+	public abstract fun read (Ljava/nio/file/Path;)Lio/github/detekt/tooling/api/Baseline;
+	public abstract fun write (Ljava/nio/file/Path;Lio/github/detekt/tooling/api/Baseline;)V
+}
+
+public final class io/github/detekt/tooling/api/BaselineProvider$Companion {
+	public final fun load (Ljava/lang/ClassLoader;)Lio/github/detekt/tooling/api/BaselineProvider;
+	public static synthetic fun load$default (Lio/github/detekt/tooling/api/BaselineProvider$Companion;Ljava/lang/ClassLoader;ILjava/lang/Object;)Lio/github/detekt/tooling/api/BaselineProvider;
 }
 
 public abstract interface class io/github/detekt/tooling/api/DefaultConfigurationProvider {
 	public static final field Companion Lio/github/detekt/tooling/api/DefaultConfigurationProvider$Companion;
 	public abstract fun copy (Ljava/nio/file/Path;)V
 	public abstract fun get ()Lio/gitlab/arturbosch/detekt/api/Config;
+	public abstract fun init (Lio/github/detekt/tooling/api/spec/ExtensionsSpec;)V
 }
 
 public final class io/github/detekt/tooling/api/DefaultConfigurationProvider$Companion {
-	public final fun load (Ljava/lang/ClassLoader;)Lio/github/detekt/tooling/api/DefaultConfigurationProvider;
-	public static synthetic fun load$default (Lio/github/detekt/tooling/api/DefaultConfigurationProvider$Companion;Ljava/lang/ClassLoader;ILjava/lang/Object;)Lio/github/detekt/tooling/api/DefaultConfigurationProvider;
+	public final fun load (Lio/github/detekt/tooling/api/spec/ExtensionsSpec;Ljava/lang/ClassLoader;)Lio/github/detekt/tooling/api/DefaultConfigurationProvider;
+	public static synthetic fun load$default (Lio/github/detekt/tooling/api/DefaultConfigurationProvider$Companion;Lio/github/detekt/tooling/api/spec/ExtensionsSpec;Ljava/lang/ClassLoader;ILjava/lang/Object;)Lio/github/detekt/tooling/api/DefaultConfigurationProvider;
 }
 
 public abstract interface class io/github/detekt/tooling/api/Detekt {
 	public abstract fun run ()Lio/github/detekt/tooling/api/AnalysisResult;
-	public abstract fun run (Ljava/lang/String;Ljava/lang/String;)Lio/github/detekt/tooling/api/AnalysisResult;
-	public abstract fun run (Ljava/nio/file/Path;)Lio/github/detekt/tooling/api/AnalysisResult;
 	public abstract fun run (Ljava/util/Collection;Lorg/jetbrains/kotlin/resolve/BindingContext;)Lio/github/detekt/tooling/api/AnalysisResult;
 }
 
@@ -44,6 +65,7 @@ public abstract class io/github/detekt/tooling/api/DetektError : java/lang/Runti
 public abstract interface class io/github/detekt/tooling/api/DetektProvider {
 	public static final field Companion Lio/github/detekt/tooling/api/DetektProvider$Companion;
 	public abstract fun get (Lio/github/detekt/tooling/api/spec/ProcessingSpec;)Lio/github/detekt/tooling/api/Detekt;
+	public abstract fun getPriority ()I
 }
 
 public final class io/github/detekt/tooling/api/DetektProvider$Companion {
@@ -51,11 +73,15 @@ public final class io/github/detekt/tooling/api/DetektProvider$Companion {
 	public static synthetic fun load$default (Lio/github/detekt/tooling/api/DetektProvider$Companion;Ljava/lang/ClassLoader;ILjava/lang/Object;)Lio/github/detekt/tooling/api/DetektProvider;
 }
 
+public final class io/github/detekt/tooling/api/DetektProvider$DefaultImpls {
+	public static fun getPriority (Lio/github/detekt/tooling/api/DetektProvider;)I
+}
+
 public final class io/github/detekt/tooling/api/InvalidConfig : io/github/detekt/tooling/api/DetektError {
 	public fun <init> (Ljava/lang/String;)V
 }
 
-public final class io/github/detekt/tooling/api/MaxIssuesReached : io/github/detekt/tooling/api/DetektError {
+public final class io/github/detekt/tooling/api/IssuesFound : io/github/detekt/tooling/api/DetektError {
 	public fun <init> (Ljava/lang/String;)V
 }
 
@@ -80,16 +106,18 @@ public abstract interface class io/github/detekt/tooling/api/spec/BaselineSpec {
 }
 
 public abstract interface class io/github/detekt/tooling/api/spec/CompilerSpec {
+	public abstract fun getApiVersion ()Ljava/lang/String;
 	public abstract fun getClasspath ()Ljava/lang/String;
+	public abstract fun getFreeCompilerArgs ()Ljava/util/List;
+	public abstract fun getJdkHome ()Ljava/nio/file/Path;
 	public abstract fun getJvmTarget ()Ljava/lang/String;
 	public abstract fun getLanguageVersion ()Ljava/lang/String;
 }
 
 public abstract interface class io/github/detekt/tooling/api/spec/ConfigSpec {
 	public abstract fun getConfigPaths ()Ljava/util/Collection;
-	public abstract fun getKnownPatterns ()Ljava/util/Collection;
 	public abstract fun getResources ()Ljava/util/Collection;
-	public abstract fun getShouldValidateBeforeAnalysis ()Z
+	public abstract fun getShouldValidateBeforeAnalysis ()Ljava/lang/Boolean;
 	public abstract fun getUseDefaultConfig ()Z
 }
 
@@ -100,7 +128,6 @@ public abstract interface class io/github/detekt/tooling/api/spec/ExecutionSpec 
 }
 
 public abstract interface class io/github/detekt/tooling/api/spec/ExtensionsSpec {
-	public abstract fun getDisableDefaultRuleSets ()Z
 	public abstract fun getDisabledExtensions ()Ljava/util/Set;
 	public abstract fun getPlugins ()Lio/github/detekt/tooling/api/spec/ExtensionsSpec$Plugins;
 }
@@ -134,9 +161,8 @@ public final class io/github/detekt/tooling/api/spec/ProcessingSpec$Companion {
 }
 
 public abstract interface class io/github/detekt/tooling/api/spec/ProjectSpec {
+	public abstract fun getAnalysisMode ()Lio/github/detekt/tooling/api/AnalysisMode;
 	public abstract fun getBasePath ()Ljava/nio/file/Path;
-	public abstract fun getExcludes ()Ljava/util/Collection;
-	public abstract fun getIncludes ()Ljava/util/Collection;
 	public abstract fun getInputPaths ()Ljava/util/Collection;
 }
 
@@ -152,41 +178,52 @@ public abstract interface class io/github/detekt/tooling/api/spec/ReportsSpec$Re
 public abstract interface class io/github/detekt/tooling/api/spec/RulesSpec {
 	public abstract fun getActivateAllRules ()Z
 	public abstract fun getAutoCorrect ()Z
-	public abstract fun getExcludeCorrectable ()Z
-	public abstract fun getMaxIssuePolicy ()Lio/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy;
+	public abstract fun getFailurePolicy ()Lio/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy;
 	public abstract fun getRunPolicy ()Lio/github/detekt/tooling/api/spec/RulesSpec$RunPolicy;
 }
 
-public abstract class io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy {
+public abstract class io/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy {
 }
 
-public final class io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy$AllowAmount : io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy {
-	public fun <init> (I)V
-	public final fun getAmount ()I
+public final class io/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy$FailOnSeverity : io/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy {
+	public fun <init> (Lio/gitlab/arturbosch/detekt/api/Severity;)V
+	public final fun component1 ()Lio/gitlab/arturbosch/detekt/api/Severity;
+	public final fun copy (Lio/gitlab/arturbosch/detekt/api/Severity;)Lio/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy$FailOnSeverity;
+	public static synthetic fun copy$default (Lio/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy$FailOnSeverity;Lio/gitlab/arturbosch/detekt/api/Severity;ILjava/lang/Object;)Lio/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy$FailOnSeverity;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMinSeverity ()Lio/gitlab/arturbosch/detekt/api/Severity;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy$AllowAny : io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy {
-	public static final field INSTANCE Lio/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy$AllowAny;
-}
-
-public final class io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy$NonSpecified : io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy {
-	public static final field INSTANCE Lio/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy$NonSpecified;
-}
-
-public final class io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy$NoneAllowed : io/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy {
-	public static final field INSTANCE Lio/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy$NoneAllowed;
+public final class io/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy$NeverFail : io/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy {
+	public static final field INSTANCE Lio/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy$NeverFail;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public abstract class io/github/detekt/tooling/api/spec/RulesSpec$RunPolicy {
 }
 
+public final class io/github/detekt/tooling/api/spec/RulesSpec$RunPolicy$DisableDefaultRuleSets : io/github/detekt/tooling/api/spec/RulesSpec$RunPolicy {
+	public static final field INSTANCE Lio/github/detekt/tooling/api/spec/RulesSpec$RunPolicy$DisableDefaultRuleSets;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/github/detekt/tooling/api/spec/RulesSpec$RunPolicy$NoRestrictions : io/github/detekt/tooling/api/spec/RulesSpec$RunPolicy {
 	public static final field INSTANCE Lio/github/detekt/tooling/api/spec/RulesSpec$RunPolicy$NoRestrictions;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/detekt/tooling/api/spec/RulesSpec$RunPolicy$RestrictToSingleRule : io/github/detekt/tooling/api/spec/RulesSpec$RunPolicy {
-	public fun <init> (Lkotlin/Pair;)V
-	public final fun getId ()Lkotlin/Pair;
+	public fun <init> (Lio/gitlab/arturbosch/detekt/api/RuleSet$Id;Ljava/lang/String;)V
+	public final fun getRuleId ()Ljava/lang/String;
+	public final fun getRuleSetId ()Lio/gitlab/arturbosch/detekt/api/RuleSet$Id;
 }
 
 public final class io/github/detekt/tooling/dsl/BaselineSpecBuilder : io/github/detekt/tooling/dsl/Builder {
@@ -207,10 +244,16 @@ public final class io/github/detekt/tooling/dsl/CompilerSpecBuilder : io/github/
 	public fun <init> ()V
 	public fun build ()Lio/github/detekt/tooling/api/spec/CompilerSpec;
 	public synthetic fun build ()Ljava/lang/Object;
+	public final fun getApiVersion ()Ljava/lang/String;
 	public final fun getClasspath ()Ljava/lang/String;
+	public final fun getFreeCompilerArgs ()Ljava/util/List;
+	public final fun getJdkHome ()Ljava/nio/file/Path;
 	public final fun getJvmTarget ()Ljava/lang/String;
 	public final fun getLanguageVersion ()Ljava/lang/String;
+	public final fun setApiVersion (Ljava/lang/String;)V
 	public final fun setClasspath (Ljava/lang/String;)V
+	public final fun setFreeCompilerArgs (Ljava/util/List;)V
+	public final fun setJdkHome (Ljava/nio/file/Path;)V
 	public final fun setJvmTarget (Ljava/lang/String;)V
 	public final fun setLanguageVersion (Ljava/lang/String;)V
 }
@@ -220,14 +263,12 @@ public final class io/github/detekt/tooling/dsl/ConfigSpecBuilder : io/github/de
 	public fun build ()Lio/github/detekt/tooling/api/spec/ConfigSpec;
 	public synthetic fun build ()Ljava/lang/Object;
 	public final fun getConfigPaths ()Ljava/util/Collection;
-	public final fun getKnownPatterns ()Ljava/util/Collection;
 	public final fun getResources ()Ljava/util/Collection;
-	public final fun getShouldValidateBeforeAnalysis ()Z
+	public final fun getShouldValidateBeforeAnalysis ()Ljava/lang/Boolean;
 	public final fun getUseDefaultConfig ()Z
 	public final fun setConfigPaths (Ljava/util/Collection;)V
-	public final fun setKnownPatterns (Ljava/util/Collection;)V
 	public final fun setResources (Ljava/util/Collection;)V
-	public final fun setShouldValidateBeforeAnalysis (Z)V
+	public final fun setShouldValidateBeforeAnalysis (Ljava/lang/Boolean;)V
 	public final fun setUseDefaultConfig (Z)V
 }
 
@@ -250,11 +291,7 @@ public final class io/github/detekt/tooling/dsl/ExtensionsSpecBuilder : io/githu
 	public final fun disableExtension (Ljava/lang/String;)V
 	public final fun fromClassloader (Lkotlin/jvm/functions/Function0;)V
 	public final fun fromPaths (Lkotlin/jvm/functions/Function0;)V
-	public final fun getDisableDefaultRuleSets ()Z
-	public final fun getDisabledExtensions ()Ljava/util/Set;
 	public final fun getPlugins ()Lio/github/detekt/tooling/api/spec/ExtensionsSpec$Plugins;
-	public final fun setDisableDefaultRuleSets (Z)V
-	public final fun setDisabledExtensions (Ljava/util/Set;)V
 	public final fun setPlugins (Lio/github/detekt/tooling/api/spec/ExtensionsSpec$Plugins;)V
 }
 
@@ -292,13 +329,11 @@ public final class io/github/detekt/tooling/dsl/ProjectSpecBuilder : io/github/d
 	public fun <init> ()V
 	public fun build ()Lio/github/detekt/tooling/api/spec/ProjectSpec;
 	public synthetic fun build ()Ljava/lang/Object;
+	public final fun getAnalysisMode ()Lio/github/detekt/tooling/api/AnalysisMode;
 	public final fun getBasePath ()Ljava/nio/file/Path;
-	public final fun getExcludes ()Ljava/util/Collection;
-	public final fun getIncludes ()Ljava/util/Collection;
 	public final fun getInputPaths ()Ljava/util/Collection;
+	public final fun setAnalysisMode (Lio/github/detekt/tooling/api/AnalysisMode;)V
 	public final fun setBasePath (Ljava/nio/file/Path;)V
-	public final fun setExcludes (Ljava/util/Collection;)V
-	public final fun setIncludes (Ljava/util/Collection;)V
 	public final fun setInputPaths (Ljava/util/Collection;)V
 }
 
@@ -317,13 +352,11 @@ public final class io/github/detekt/tooling/dsl/RulesSpecBuilder : io/github/det
 	public synthetic fun build ()Ljava/lang/Object;
 	public final fun getActivateAllRules ()Z
 	public final fun getAutoCorrect ()Z
-	public final fun getExcludeCorrectable ()Z
-	public final fun getMaxIssuePolicy ()Lio/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy;
+	public final fun getFailurePolicy ()Lio/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy;
 	public final fun getRunPolicy ()Lio/github/detekt/tooling/api/spec/RulesSpec$RunPolicy;
 	public final fun setActivateAllRules (Z)V
 	public final fun setAutoCorrect (Z)V
-	public final fun setExcludeCorrectable (Z)V
-	public final fun setMaxIssuePolicy (Lio/github/detekt/tooling/api/spec/RulesSpec$MaxIssuePolicy;)V
+	public final fun setFailurePolicy (Lio/github/detekt/tooling/api/spec/RulesSpec$FailurePolicy;)V
 	public final fun setRunPolicy (Lio/github/detekt/tooling/api/spec/RulesSpec$RunPolicy;)V
 }
 

@@ -1,11 +1,30 @@
 import io.gitlab.arturbosch.detekt.Detekt
 import io.gitlab.arturbosch.detekt.DetektCreateBaselineTask
+import io.gitlab.arturbosch.detekt.report.ReportMergeTask
 
 plugins {
     id("releasing")
-    alias(libs.plugins.detekt)
-    alias(libs.plugins.gradleVersionz)
-    alias(libs.plugins.sonarqube)
+    id("io.gitlab.arturbosch.detekt")
+    id("org.jetbrains.dokka") version "2.0.0"
+}
+
+dependencies {
+    dokka(projects.detektApi)
+    dokka(projects.detektPsiUtils)
+    dokka(projects.detektTest)
+    dokka(projects.detektTestUtils)
+    dokka(projects.detektTooling)
+    dokka("io.gitlab.arturbosch.detekt:detekt-gradle-plugin")
+}
+
+dokka {
+    dokkaPublications.html {
+        outputDirectory = layout.projectDirectory.dir("website/static/kdoc")
+    }
+}
+
+val detektReportMergeSarif by tasks.registering(ReportMergeTask::class) {
+    output = layout.buildDirectory.file("reports/detekt/merge.sarif.json")
 }
 
 allprojects {
@@ -15,92 +34,62 @@ allprojects {
     apply(plugin = "io.gitlab.arturbosch.detekt")
 
     detekt {
-        source = objects.fileCollection().from(
-            io.gitlab.arturbosch.detekt.extensions.DetektExtension.DEFAULT_SRC_DIR_JAVA,
-            "src/test/java",
-            io.gitlab.arturbosch.detekt.extensions.DetektExtension.DEFAULT_SRC_DIR_KOTLIN,
-            "src/test/kotlin"
-        )
         buildUponDefaultConfig = true
         baseline = file("$rootDir/config/detekt/baseline.xml")
-
-        reports {
-            xml.enabled = true
-            html.enabled = true
-            txt.enabled = true
-            sarif.enabled = true
-        }
     }
 
     dependencies {
         detekt(project(":detekt-cli"))
-        detektPlugins(project(":custom-checks"))
         detektPlugins(project(":detekt-formatting"))
+        detektPlugins(project(":detekt-rules-libraries"))
+        detektPlugins(project(":detekt-rules-ruleauthors"))
     }
 
     tasks.withType<Detekt>().configureEach {
         jvmTarget = "1.8"
+        reports {
+            xml.required = true
+            html.required = true
+            sarif.required = true
+            md.required = true
+        }
+        basePath = rootDir.absolutePath
+    }
+    detektReportMergeSarif {
+        input.from(tasks.withType<Detekt>().map { it.reports.sarif.outputLocation })
+    }
+    tasks.withType<DetektCreateBaselineTask>().configureEach {
+        jvmTarget = "1.8"
     }
 }
 
-val analysisDir = file(projectDir)
-val baselineFile = file("$rootDir/config/detekt/baseline.xml")
-val configFile = file("$rootDir/config/detekt/detekt.yml")
-val statisticsConfigFile = file("$rootDir/config/detekt/statistics.yml")
-
-val kotlinFiles = "**/*.kt"
-val kotlinScriptFiles = "**/*.kts"
-val resourceFiles = "**/resources/**"
-val buildFiles = "**/build/**"
-
-val detektFormat by tasks.registering(Detekt::class) {
-    description = "Formats whole project."
-    parallel = true
-    disableDefaultRuleSets = true
-    buildUponDefaultConfig = true
-    autoCorrect = true
-    setSource(analysisDir)
-    config.setFrom(listOf(statisticsConfigFile, configFile))
-    include(kotlinFiles)
-    include(kotlinScriptFiles)
-    exclude(resourceFiles)
-    exclude(buildFiles)
-    baseline.set(baselineFile)
-    reports {
-        xml.enabled = false
-        html.enabled = false
-        txt.enabled = false
+subprojects {
+    tasks.withType<Test>().configureEach {
+        develocity {
+            testRetry {
+                @Suppress("MagicNumber")
+                if (providers.environmentVariable("CI").isPresent) {
+                    maxRetries = 3
+                    maxFailures = 20
+                }
+            }
+            predictiveTestSelection {
+                enabled = providers.gradleProperty("enablePTS").map(String::toBooleanStrict)
+            }
+        }
     }
 }
 
-val detektAll by tasks.registering(Detekt::class) {
-    description = "Runs the whole project at once."
-    parallel = true
-    buildUponDefaultConfig = true
-    setSource(analysisDir)
-    config.setFrom(listOf(statisticsConfigFile, configFile))
-    include(kotlinFiles)
-    include(kotlinScriptFiles)
-    exclude(resourceFiles)
-    exclude(buildFiles)
-    baseline.set(baselineFile)
-    reports {
-        xml.enabled = false
-        html.enabled = false
-        txt.enabled = false
+setOf(
+    "detektMain",
+    "detektTest",
+    "detektFunctionalTest",
+    "detektFunctionalTestMinSupportedGradle",
+    "detektTestFixtures",
+).forEach { taskName ->
+    tasks.register(taskName) {
+        dependsOn(gradle.includedBuild("detekt-gradle-plugin").task(":$taskName"))
     }
 }
 
-val detektProjectBaseline by tasks.registering(DetektCreateBaselineTask::class) {
-    description = "Overrides current baseline."
-    buildUponDefaultConfig.set(true)
-    ignoreFailures.set(true)
-    parallel.set(true)
-    setSource(analysisDir)
-    config.setFrom(listOf(statisticsConfigFile, configFile))
-    include(kotlinFiles)
-    include(kotlinScriptFiles)
-    exclude(resourceFiles)
-    exclude(buildFiles)
-    baseline.set(baselineFile)
-}
+tasks.build { dependsOn(gradle.includedBuild("detekt-gradle-plugin").task(":build")) }

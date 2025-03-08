@@ -3,23 +3,29 @@ plugins {
 }
 
 dependencies {
-    implementation(libs.snakeyaml)
-    implementation(projects.detektApi)
+    api(projects.detektApi)
+    api(projects.detektParser)
+    api(projects.detektTooling)
+    implementation(libs.snakeyaml.engine)
+    implementation(libs.kotlin.reflect)
     implementation(projects.detektMetrics)
-    implementation(projects.detektParser)
     implementation(projects.detektPsiUtils)
-    implementation(projects.detektTooling)
-    implementation(projects.detektReportHtml)
-    implementation(projects.detektReportTxt)
-    implementation(projects.detektReportXml)
-    implementation(projects.detektReportSarif)
+    implementation(projects.detektUtils)
 
     testRuntimeOnly(projects.detektRules)
-    testRuntimeOnly(projects.detektFormatting)
-    testRuntimeOnly(libs.spek.runner)
+    testImplementation(projects.detektReportHtml)
+    testImplementation(projects.detektReportMd)
+    testImplementation(projects.detektReportSarif)
+    testImplementation(projects.detektReportXml)
     testImplementation(projects.detektTest)
     testImplementation(testFixtures(projects.detektApi))
-    testImplementation(libs.mockk)
-    testImplementation(libs.reflections)
-    testImplementation(libs.bundles.testImplementation)
+    testImplementation(libs.classgraph)
+    testImplementation(libs.assertj.core)
+    testRuntimeOnly(libs.slf4j.simple)
 }
+
+consumeGeneratedConfig(
+    fromProject = projects.detektGenerator,
+    fromConfiguration = "generatedCoreConfig",
+    forTask = tasks.sourcesJar
+)

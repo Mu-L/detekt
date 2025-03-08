@@ -1,8 +1,7 @@
 package io.gitlab.arturbosch.detekt.rules.coroutines
 
-import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.RuleSet
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.internal.DefaultRuleSetProvider
 
 /**
@@ -11,15 +10,20 @@ import io.gitlab.arturbosch.detekt.api.internal.DefaultRuleSetProvider
 @ActiveByDefault(since = "1.4.0")
 class CoroutinesProvider : DefaultRuleSetProvider {
 
-    override val ruleSetId: String = "coroutines"
+    override val ruleSetId = RuleSet.Id("coroutines")
 
-    override fun instance(config: Config): RuleSet = RuleSet(
+    override fun instance(): RuleSet = RuleSet(
         ruleSetId,
         listOf(
-            GlobalCoroutineUsage(config),
-            RedundantSuspendModifier(config),
-            SleepInsteadOfDelay(config),
-            SuspendFunWithFlowReturnType(config)
+            ::CoroutineLaunchedInTestWithoutRunTest,
+            ::GlobalCoroutineUsage,
+            ::InjectDispatcher,
+            ::RedundantSuspendModifier,
+            ::SleepInsteadOfDelay,
+            ::SuspendFunWithFlowReturnType,
+            ::SuspendFunWithCoroutineScopeReceiver,
+            ::SuspendFunSwallowedCancellation,
+            ::SuspendFunInFinallySection
         )
     )
 }

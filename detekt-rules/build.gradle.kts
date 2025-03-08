@@ -24,9 +24,7 @@ dependencies {
     testImplementation(projects.detektRulesNaming)
     testImplementation(projects.detektRulesPerformance)
     testImplementation(projects.detektRulesStyle)
-    testImplementation(libs.bundles.testImplementation)
-    testImplementation(libs.reflections)
-    testRuntimeOnly(libs.spek.runner)
+    testImplementation(libs.assertj.core)
+    testImplementation(libs.classgraph)
+    testImplementation(testFixtures(projects.detektApi))
 }
-
-tasks.build { finalizedBy(":detekt-generator:generateDocumentation") }

@@ -1,14 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.documentation
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import org.jetbrains.kotlin.psi.KtFile
 
 /**
@@ -19,14 +16,10 @@ import org.jetbrains.kotlin.psi.KtFile
  * a regular expression produced from the passed template license file (defined via `licenseTemplateFile` configuration
  * option).
  */
-class AbsentOrWrongFileLicense(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        id = RULE_NAME,
-        severity = Severity.Maintainability,
-        description = "License text is absent or incorrect in the file.",
-        debt = Debt.FIVE_MINS
-    )
+class AbsentOrWrongFileLicense(config: Config) : Rule(
+    config,
+    "License text is absent or incorrect."
+) {
 
     @Suppress("unused")
     @Configuration("path to file with license header template resolved relatively to config file")
@@ -36,14 +29,10 @@ class AbsentOrWrongFileLicense(config: Config = Config.empty) : Rule(config) {
     @Configuration("whether or not the license header template is a regex template")
     private val licenseTemplateIsRegex: Boolean by config(DEFAULT_LICENSE_TEMPLATE_IS_REGEX)
 
-    override fun visitCondition(root: KtFile): Boolean =
-        super.visitCondition(root) && (root.hasLicenseHeader() || root.hasLicenseHeaderRegex())
-
     override fun visitKtFile(file: KtFile) {
-        if (!file.hasValidLicense()) {
+        if ((file.hasLicenseHeader() || file.hasLicenseHeaderRegex()) && !file.hasValidLicense()) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.atPackageOrFirstDecl(file),
                     "Expected license not found or incorrect in the file: ${file.name}."
                 )

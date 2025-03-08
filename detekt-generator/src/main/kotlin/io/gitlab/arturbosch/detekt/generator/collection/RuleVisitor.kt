@@ -1,47 +1,39 @@
 package io.gitlab.arturbosch.detekt.generator.collection
 
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
+import io.gitlab.arturbosch.detekt.api.Alias
 import io.gitlab.arturbosch.detekt.api.DetektVisitor
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.internal.AutoCorrectable
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
-import io.gitlab.arturbosch.detekt.formatting.FormattingRule
-import io.gitlab.arturbosch.detekt.generator.collection.exception.InvalidAliasesDeclaration
 import io.gitlab.arturbosch.detekt.generator.collection.exception.InvalidDocumentationException
-import io.gitlab.arturbosch.detekt.generator.collection.exception.InvalidIssueDeclaration
-import io.gitlab.arturbosch.detekt.rules.empty.EmptyRule
-import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtSuperTypeList
-import org.jetbrains.kotlin.psi.KtValueArgument
 import org.jetbrains.kotlin.psi.psiUtil.containingClass
 import org.jetbrains.kotlin.psi.psiUtil.getSuperNames
-import java.lang.reflect.Modifier
 
-internal class RuleVisitor : DetektVisitor() {
+internal class RuleVisitor(textReplacements: Map<String, String>) : DetektVisitor() {
 
     val containsRule
         get() = classesMap.any { it.value }
     private var name = ""
-    private val documentationCollector = DocumentationCollector()
+    private val documentationCollector = DocumentationCollector(textReplacements)
     private var defaultActivationStatus: DefaultActivationStatus = Inactive
     private var autoCorrect = false
-    private var requiresTypeResolution = false
-    private var severity = ""
-    private var debt = ""
-    private var aliases: String? = null
+    private var requiresFullAnalysis = false
+    private var aliases: List<String> = emptyList()
     private var parent = ""
     private val configurationCollector = ConfigurationCollector()
     private val classesMap = mutableMapOf<String, Boolean>()
+    private var deprecationMessage: String? = null
 
     fun getRule(): Rule {
         if (documentationCollector.description.isEmpty()) {
             throw InvalidDocumentationException("Rule $name is missing a description in its KDoc.")
         }
 
-        val configurationByAnnotation = configurationCollector.getConfiguration()
+        val configurationsByAnnotation = configurationCollector.getConfigurations()
 
         return Rule(
             name = name,
@@ -49,13 +41,12 @@ internal class RuleVisitor : DetektVisitor() {
             nonCompliantCodeExample = documentationCollector.nonCompliant,
             compliantCodeExample = documentationCollector.compliant,
             defaultActivationStatus = defaultActivationStatus,
-            severity = severity,
-            debt = debt,
             aliases = aliases,
             parent = parent,
-            configuration = configurationByAnnotation,
+            configurations = configurationsByAnnotation,
             autoCorrect = autoCorrect,
-            requiresTypeResolution = requiresTypeResolution
+            deprecationMessage = deprecationMessage,
+            requiresFullAnalysis = requiresFullAnalysis
         )
     }
 
@@ -63,14 +54,14 @@ internal class RuleVisitor : DetektVisitor() {
         val isRule = list.entries
             ?.asSequence()
             ?.map { it.typeAsUserType?.referencedName }
-            ?.any { ruleClasses.contains(it) } ?: false
+            ?.any { ruleClasses.contains(it) }
+            ?: false
 
         val containingClass = list.containingClass()
         val className = containingClass?.name
         if (containingClass != null && className != null && !classesMap.containsKey(className)) {
             classesMap[className] = isRule
             parent = containingClass.getSuperNames().firstOrNull { ruleClasses.contains(it) }.orEmpty()
-            extractIssueSeverityAndDebt(containingClass)
             extractAliases(containingClass)
         }
         super.visitSuperTypeList(list)
@@ -103,7 +94,9 @@ internal class RuleVisitor : DetektVisitor() {
         }
 
         autoCorrect = classOrObject.isAnnotatedWith(AutoCorrectable::class)
-        requiresTypeResolution = classOrObject.isAnnotatedWith(RequiresTypeResolution::class)
+        requiresFullAnalysis = classOrObject.superTypeListEntries
+            .any { it.text.substringAfterLast(".") == RequiresFullAnalysis::class.simpleName }
+        deprecationMessage = classOrObject.firstAnnotationParameterOrNull(Deprecated::class)
 
         documentationCollector.setClass(classOrObject)
     }
@@ -119,58 +112,24 @@ internal class RuleVisitor : DetektVisitor() {
     }
 
     private fun extractAliases(klass: KtClass) {
-        val initializer = klass.getProperties()
-            .singleOrNull { it.name == "defaultRuleIdAliases" }
-            ?.initializer
-        if (initializer != null) {
-            aliases = (
-                initializer as? KtCallExpression
-                    ?: throw InvalidAliasesDeclaration()
-                )
-                .valueArguments
-                .joinToString(", ") { it.text.replace("\"", "") }
+        val annotation = klass.getAnnotation(Alias::class) ?: return
+        aliases = annotation.valueArguments.mapNotNull {
+            it.getArgumentExpression()
+                ?.text
+                ?.withoutQuotes()
         }
-    }
-
-    private fun extractIssueSeverityAndDebt(klass: KtClass) {
-        val arguments = (
-            klass.getProperties()
-                .singleOrNull { it.name == "issue" }
-                ?.initializer as? KtCallExpression
-            )
-            ?.valueArguments.orEmpty()
-
-        if (arguments.size >= ISSUE_ARGUMENT_SIZE) {
-            severity = getArgument(arguments[1], "Severity")
-            val debtName = getArgument(arguments[DEBT_ARGUMENT_INDEX], "Debt")
-            val debtDeclarations = Debt::class.java.declaredFields.filter { Modifier.isStatic(it.modifiers) }
-            val debtDeclaration = debtDeclarations.singleOrNull { it.name == debtName }
-            if (debtDeclaration != null) {
-                debtDeclaration.isAccessible = true
-                debt = debtDeclaration[Debt::class.java].toString()
-            }
-        }
-    }
-
-    private fun getArgument(argument: KtValueArgument, name: String): String {
-        val text = argument.text
-        val type = text.split('.')
-        if (text.startsWith(name, true) && type.size == 2) {
-            return type[1]
-        }
-        throw InvalidIssueDeclaration(name)
     }
 
     companion object {
-        @Suppress("DEPRECATION")
         private val ruleClasses = listOf(
-            io.gitlab.arturbosch.detekt.api.Rule::class.simpleName,
-            FormattingRule::class.simpleName,
-            io.gitlab.arturbosch.detekt.api.ThresholdRule::class.simpleName,
-            EmptyRule::class.simpleName
+            // These references are stringly-typed to prevent dependency cycle:
+            // This class requires FormattingRule,
+            // which needs detekt-formatting.jar,
+            // which needs :detekt-formatting:processResources task output,
+            // which needs output of this class.
+            "Rule", // io.gitlab.arturbosch.detekt.api.Rule
+            "FormattingRule", // io.gitlab.arturbosch.detekt.formatting.FormattingRule
+            "EmptyRule", // io.gitlab.arturbosch.detekt.rules.empty.EmptyRule
         )
-
-        private const val ISSUE_ARGUMENT_SIZE = 4
-        private const val DEBT_ARGUMENT_INDEX = 3
     }
 }

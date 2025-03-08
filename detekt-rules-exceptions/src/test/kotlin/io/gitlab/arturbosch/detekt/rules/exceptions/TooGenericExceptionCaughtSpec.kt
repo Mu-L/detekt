@@ -2,79 +2,134 @@ package io.gitlab.arturbosch.detekt.rules.exceptions
 
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.test.TestConfig
-import io.gitlab.arturbosch.detekt.test.compileAndLint
+import io.gitlab.arturbosch.detekt.test.lint
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 import java.util.regex.PatternSyntaxException
 
 private const val CAUGHT_EXCEPTIONS_PROPERTY = "exceptionNames"
 private const val ALLOWED_EXCEPTION_NAME_REGEX = "allowedExceptionNameRegex"
 
-class TooGenericExceptionCaughtSpec : Spek({
+class TooGenericExceptionCaughtSpec {
+    @Test
+    fun `a file with many caught exceptions should find one of each kind of defaults`() {
+        val rule = TooGenericExceptionCaught(Config.empty)
+        val code = """
+            fun main() {
+                try {
+                    throw Throwable()
+                } catch (e: ArrayIndexOutOfBoundsException) {
+                    throw Error()
+                } catch (e: Error) {
+                    throw Exception()
+                } catch (e: Exception) {
+                } catch (e: IllegalMonitorStateException) {
+                } catch (e: IndexOutOfBoundsException) {
+                    throw RuntimeException()
+                } catch (e: Throwable) {
+                } catch (e: RuntimeException) {
+                    throw NullPointerException()
+                } catch (e: NullPointerException) {
+                }
+            }
+        """.trimIndent()
 
-    describe("a file with many caught exceptions") {
-
-        it("should find one of each kind of defaults") {
-            val rule = TooGenericExceptionCaught(Config.empty)
-
-            val findings = rule.compileAndLint(tooGenericExceptionCode)
-
-            assertThat(findings).hasSize(TooGenericExceptionCaught.caughtExceptionDefaults.size)
-        }
+        assertThat(rule.lint(code)).hasSameSizeAs(TooGenericExceptionCaught.caughtExceptionDefaults)
     }
 
-    describe("a file with a caught exception which is ignored") {
+    @Nested
+    inner class `a file with a caught exception which is ignored` {
 
         val code = """
-            class MyTooGenericException : RuntimeException()
-
             fun f() {
                 try {
                     throw Throwable()
-                } catch (myIgnore: MyTooGenericException) {
+                } catch (myIgnore: NullPointerException) {
                     throw Error()
                 }
             }
-        """
+        """.trimIndent()
 
-        it("should not report an ignored catch blocks because of its exception name") {
-            val config = TestConfig(mapOf(ALLOWED_EXCEPTION_NAME_REGEX to "myIgnore"))
+        @Test
+        fun `should not report an ignored catch blocks because of its exception name`() {
+            val config = TestConfig(ALLOWED_EXCEPTION_NAME_REGEX to "myIgnore")
             val rule = TooGenericExceptionCaught(config)
 
-            val findings = rule.compileAndLint(code)
+            val findings = rule.lint(code)
 
             assertThat(findings).isEmpty()
         }
 
-        it("should not report an ignored catch blocks because of its exception type") {
-            val config = TestConfig(mapOf(CAUGHT_EXCEPTIONS_PROPERTY to "[MyException]"))
+        @Test
+        fun `should not report an ignored catch blocks because of its exception type`() {
+            val config = TestConfig(CAUGHT_EXCEPTIONS_PROPERTY to "[MyException]")
             val rule = TooGenericExceptionCaught(config)
 
-            val findings = rule.compileAndLint(code)
+            val findings = rule.lint(code)
 
             assertThat(findings).isEmpty()
         }
+    }
 
-        it("should not fail when disabled with invalid regex on allowed exception names") {
-            val configRules = mapOf(
-                "active" to "false",
-                ALLOWED_EXCEPTION_NAME_REGEX to "*MyException"
-            )
-            val config = TestConfig(configRules)
-            val rule = TooGenericExceptionCaught(config)
-            val findings = rule.compileAndLint(tooGenericExceptionCode)
+    @Nested
+    inner class InvalidRegex {
+        val code = """
+            fun main() {
+                try {
+                    throw Throwable()
+                } catch (e: ArrayIndexOutOfBoundsException) {
+                    throw Error()
+                } catch (e: Error) {
+                    throw Exception()
+                } catch (e: Exception) {
+                } catch (e: IllegalMonitorStateException) {
+                } catch (e: IndexOutOfBoundsException) {
+                    throw RuntimeException()
+                } catch (e: Throwable) {
+                } catch (e: RuntimeException) {
+                    throw NullPointerException()
+                } catch (e: NullPointerException) {
+                }
+            }
+        """.trimIndent()
 
-            assertThat(findings).isEmpty()
-        }
-
-        it("should fail with invalid regex on allowed exception names") {
-            val config = TestConfig(mapOf(ALLOWED_EXCEPTION_NAME_REGEX to "*Foo"))
+        @Test
+        fun `should fail with invalid regex on allowed exception names`() {
+            val config = TestConfig(ALLOWED_EXCEPTION_NAME_REGEX to "*Foo")
             val rule = TooGenericExceptionCaught(config)
             assertThatExceptionOfType(PatternSyntaxException::class.java).isThrownBy {
-                rule.compileAndLint(tooGenericExceptionCode)
+                rule.lint(code)
             }
         }
     }
-})
+
+    @Test
+    fun `should not report any`() {
+        val rule = TooGenericExceptionCaught(TestConfig(CAUGHT_EXCEPTIONS_PROPERTY to "[]"))
+        val code = """
+            fun main() {
+                try {
+                    throw Throwable()
+                } catch (e: ArrayIndexOutOfBoundsException) {
+                    throw Error()
+                } catch (e: Error) {
+                    throw Exception()
+                } catch (e: Exception) {
+                } catch (e: IllegalMonitorStateException) {
+                } catch (e: IndexOutOfBoundsException) {
+                    throw RuntimeException()
+                } catch (e: Throwable) {
+                } catch (e: RuntimeException) {
+                    throw NullPointerException()
+                } catch (e: NullPointerException) {
+
+                }
+            }
+        """.trimIndent()
+        val findings = rule.lint(code)
+
+        assertThat(findings).isEmpty()
+    }
+}

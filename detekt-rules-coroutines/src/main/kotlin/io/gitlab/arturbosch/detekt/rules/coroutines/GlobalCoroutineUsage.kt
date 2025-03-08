@@ -1,14 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.coroutines
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
-import org.jetbrains.kotlin.resolve.calls.callUtil.getCalleeExpressionIfAny
+import org.jetbrains.kotlin.resolve.calls.util.getCalleeExpressionIfAny
 
 /**
  * Report usages of `GlobalScope.launch` and `GlobalScope.async`. It is highly discouraged by the Kotlin documentation:
@@ -39,19 +36,16 @@ import org.jetbrains.kotlin.resolve.calls.callUtil.getCalleeExpressionIfAny
  * }
  * </compliant>
  */
-class GlobalCoroutineUsage(config: Config = Config.empty) : Rule(config) {
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Defect,
-        "Usage of GlobalScope instance is highly discouraged",
-        Debt.TEN_MINS
-    )
+class GlobalCoroutineUsage(config: Config) : Rule(
+    config,
+    "The usage of the `GlobalScope` instance is highly discouraged."
+) {
 
     override fun visitDotQualifiedExpression(expression: KtDotQualifiedExpression) {
         if (expression.receiverExpression.text == "GlobalScope" &&
             expression.getCalleeExpressionIfAny()?.text in listOf("launch", "async")
         ) {
-            report(CodeSmell(issue, Entity.from(expression), MESSAGE))
+            report(Finding(Entity.from(expression), MESSAGE))
         }
 
         super.visitDotQualifiedExpression(expression)

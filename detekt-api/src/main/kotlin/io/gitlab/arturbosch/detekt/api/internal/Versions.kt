@@ -1,5 +1,6 @@
 package io.gitlab.arturbosch.detekt.api.internal
 
+import io.github.detekt.utils.openSafeStream
 import io.gitlab.arturbosch.detekt.api.Extension
 import java.net.URL
 import java.util.jar.Manifest
@@ -15,14 +16,21 @@ fun whichOS(): String = System.getProperty("os.name")
 fun whichJava(): String = System.getProperty("java.runtime.version")
 
 /**
+ * Returns the version of Kotlin that detekt was compiled with
+ */
+fun whichKotlin(): String = getManifestValue("KotlinImplementationVersion")
+
+/**
  * Returns the bundled detekt version.
  */
-fun whichDetekt(): String? {
-    fun readVersion(resource: URL): String? = resource.openStream()
-        .use { Manifest(it).mainAttributes.getValue("DetektVersion") }
+fun whichDetekt(): String = getManifestValue("DetektVersion")
+
+private fun getManifestValue(key: String): String {
+    fun readVersion(resource: URL): String? = resource.openSafeStream()
+        .use { Manifest(it).mainAttributes.getValue(key) }
 
     return Extension::class.java.classLoader.getResources("META-INF/MANIFEST.MF")
         .asSequence()
         .mapNotNull { runCatching { readVersion(it) }.getOrNull() }
-        .firstOrNull()
+        .first()
 }

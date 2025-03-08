@@ -2,86 +2,69 @@ package io.gitlab.arturbosch.detekt.test
 
 import io.github.detekt.test.utils.KotlinScriptEngine
 import io.github.detekt.test.utils.compileContentForTest
-import io.github.detekt.test.utils.compileForTest
-import io.gitlab.arturbosch.detekt.api.BaseRule
+import io.gitlab.arturbosch.detekt.api.CompilerResources
+import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.Finding
-import io.gitlab.arturbosch.detekt.api.internal.CompilerResources
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
+import io.gitlab.arturbosch.detekt.api.Rule
+import io.gitlab.arturbosch.detekt.api.RuleSet
+import io.gitlab.arturbosch.detekt.core.suppressors.isSuppressedBy
 import org.intellij.lang.annotations.Language
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.jetbrains.kotlin.cli.jvm.compiler.NoScopeRecordCliBindingTrace
-import org.jetbrains.kotlin.cli.jvm.compiler.TopDownAnalyzerFacadeForJVM
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowValueFactoryImpl
-import org.jetbrains.kotlin.resolve.lazy.declarations.FileBasedDeclarationProviderFactory
-import java.nio.file.Path
 
 private val shouldCompileTestSnippets: Boolean =
-    System.getProperty("compile-snippet-tests", "false")!!.toBoolean()
+    System.getProperty("compile-test-snippets", "false")!!.toBoolean()
 
-fun BaseRule.compileAndLint(@Language("kotlin") content: String): List<Finding> {
-    if (shouldCompileTestSnippets) {
+fun Rule.lint(
+    @Language("kotlin") content: String,
+    compilerResources: CompilerResources = FakeCompilerResources(),
+    compile: Boolean = true,
+): List<Finding> {
+    require(this !is RequiresFullAnalysis) {
+        "${this.ruleName} requires full analysis so you should use lintWithContext instead of lint"
+    }
+    if (compile && shouldCompileTestSnippets) {
         KotlinScriptEngine.compile(content)
     }
-    return lint(content)
+    val ktFile = compileContentForTest(content)
+    return visitFile(ktFile, compilerResources = compilerResources).filterSuppressed(this)
 }
 
-fun BaseRule.lint(@Language("kotlin") content: String): List<Finding> {
-    val ktFile = compileContentForTest(content.trimIndent())
-    return findingsAfterVisit(ktFile)
-}
-
-fun BaseRule.lint(path: Path): List<Finding> {
-    val ktFile = compileForTest(path)
-    return findingsAfterVisit(ktFile)
-}
-
-fun BaseRule.lintWithContext(
+fun <T> T.lintWithContext(
     environment: KotlinCoreEnvironment,
     @Language("kotlin") content: String,
     @Language("kotlin") vararg additionalContents: String,
-): List<Finding> {
-    val ktFile = compileContentForTest(content.trimIndent())
-    val additionalKtFiles = additionalContents.mapIndexed { index, additionalContent ->
-        compileContentForTest(additionalContent.trimIndent(), "AdditionalTest$index.kt")
-    }
-    val bindingContext = getContextForPaths(environment, listOf(ktFile) + additionalKtFiles)
-    val languageVersionSettings = environment.configuration.languageVersionSettings
-
-    @Suppress("DEPRECATION")
-    val dataFlowValueFactory = DataFlowValueFactoryImpl(languageVersionSettings)
-    val compilerResources = CompilerResources(languageVersionSettings, dataFlowValueFactory)
-    return findingsAfterVisit(ktFile, bindingContext, compilerResources)
-}
-
-fun BaseRule.compileAndLintWithContext(
-    environment: KotlinCoreEnvironment,
-    @Language("kotlin") content: String
-): List<Finding> {
-    if (shouldCompileTestSnippets) {
+    compilerResources: CompilerResources = CompilerResources(
+        environment.configuration.languageVersionSettings,
+        DataFlowValueFactoryImpl(environment.configuration.languageVersionSettings)
+    ),
+    compile: Boolean = true,
+): List<Finding> where T : Rule, T : RequiresFullAnalysis {
+    if (compile && shouldCompileTestSnippets) {
         KotlinScriptEngine.compile(content)
     }
-    return lintWithContext(environment, content)
+    val ktFile = compileContentForTest(content)
+    val additionalKtFiles = additionalContents.mapIndexed { index, additionalContent ->
+        compileContentForTest(additionalContent, "AdditionalTest$index.kt")
+    }
+    setBindingContext(environment.createBindingContext(listOf(ktFile) + additionalKtFiles))
+
+    return visitFile(ktFile, compilerResources).filterSuppressed(this)
 }
 
-private fun getContextForPaths(environment: KotlinCoreEnvironment, paths: List<KtFile>) =
-    TopDownAnalyzerFacadeForJVM.analyzeFilesWithJavaIntegration(
-        environment.project,
-        paths,
-        NoScopeRecordCliBindingTrace(),
-        environment.configuration,
-        environment::createPackagePartProvider,
-        ::FileBasedDeclarationProviderFactory
-    ).bindingContext
-
-fun BaseRule.lint(ktFile: KtFile): List<Finding> = findingsAfterVisit(ktFile)
-
-private fun BaseRule.findingsAfterVisit(
-    ktFile: KtFile,
-    bindingContext: BindingContext = BindingContext.EMPTY,
-    compilerResources: CompilerResources? = null
-): List<Finding> {
-    this.visitFile(ktFile, bindingContext, compilerResources)
-    return this.findings
+fun Rule.lint(ktFile: KtFile, compilerResources: CompilerResources = FakeCompilerResources()): List<Finding> {
+    require(this !is RequiresFullAnalysis) {
+        "${this.ruleName} requires full analysis so you should use lintWithContext instead of lint"
+    }
+    return visitFile(ktFile, compilerResources = compilerResources).filterSuppressed(this)
 }
+
+private fun List<Finding>.filterSuppressed(rule: Rule): List<Finding> =
+    filterNot {
+        it.entity.ktElement.isSuppressedBy(rule.ruleName.value, rule.aliases, RuleSet.Id("NoARuleSetId"))
+    }
+
+private val Rule.aliases: Set<String> get() = config.valueOrDefault(Config.ALIASES_KEY, emptyList<String>()).toSet()

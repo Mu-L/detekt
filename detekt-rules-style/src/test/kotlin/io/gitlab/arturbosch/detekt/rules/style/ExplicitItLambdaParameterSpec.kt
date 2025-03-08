@@ -1,68 +1,123 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.test.compileAndLint
-import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import io.gitlab.arturbosch.detekt.test.assertThat
+import io.gitlab.arturbosch.detekt.test.lint
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 
-class ExplicitItLambdaParameterSpec : Spek({
-    val subject by memoized { ExplicitItLambdaParameter(Config.empty) }
+class ExplicitItLambdaParameterSpec {
+    val subject = ExplicitItLambdaParameter(Config.empty)
 
-    describe("ExplicitItLambdaParameter rule") {
-        context("single parameter lambda with name `it` declared explicitly") {
-            it("reports when parameter type is not declared") {
-                val findings = subject.compileAndLint(
+    @Nested
+    inner class `single parameter lambda with name 'it' declared explicitly` {
+        @Test
+        fun `reports when parameter type is not declared`() {
+            val findings =
+                subject.lint(
                     """
-                fun f() {
-                    val digits = 1234.let { it -> listOf(it) }
-                }"""
+                    fun f() {
+                        val digits = 1234.let { it -> listOf(it) }
+                    }
+                    """.trimIndent(),
                 )
-                assertThat(findings).hasSize(1)
-            }
-            it("reports when parameter type is declared explicitly") {
-                val findings = subject.compileAndLint(
-                    """
-                fun f() {
-                    val lambda = { it: Int -> it.toString() }
-                }"""
-                )
-                assertThat(findings).hasSize(1)
-            }
-        }
-        context("no parameter declared explicitly") {
-            it("does not report implicit `it` parameter usage") {
-                val findings = subject.compileAndLint(
-                    """
-                fun f() {
-                    val lambda = { i: Int -> i.toString() }
-                    val digits = 1234.let { lambda(it) }.toList()
-                    val flat = listOf(listOf(1), listOf(2)).flatMap { it }
-                }"""
-                )
-                assertThat(findings).isEmpty()
-            }
+            assertThat(findings).hasSize(1)
+            assertThat(findings[0]).hasMessage(
+                "This explicit usage of `it` as the lambda parameter name can be omitted.",
+            )
         }
 
-        context("multiple parameters one of which with name `it` declared explicitly") {
-            it("reports when parameter types are not declared") {
-                val findings = subject.compileAndLint(
+        @Test
+        fun `reports when parameter type is declared explicitly`() {
+            val findings =
+                subject.lint(
                     """
-                fun f() {
-                    val flat = listOf(listOf(1), listOf(2)).mapIndexed { index, it -> it + index }
-                }"""
+                    fun f() {
+                        val lambda = { it: Int -> it.toString() }
+                    }
+                    """.trimIndent(),
                 )
-                assertThat(findings).hasSize(1)
-            }
-            it("reports when parameter types are declared explicitly") {
-                val findings = subject.compileAndLint(
+            assertThat(findings).hasSize(1)
+        }
+
+        @Test
+        fun `does not report when parameter type is declared explicitly when variable name is not it`() {
+            val findings =
+                subject.lint(
                     """
-                fun f() {
-                    val lambda = { it: Int, that: String -> it.toString() + that }
-                }"""
+                    fun f() {
+                        val lambda = { value: Int -> value.toString() }
+                    }
+                    """.trimIndent(),
                 )
-                assertThat(findings).hasSize(1)
-            }
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `does not report when parameter type is declared explicitly for un-inferrable lambda`() {
+            val findings =
+                subject.lint(
+                    """
+                    fun f1(): (Int) -> Int {
+                        return { value: Int -> value.inc() }::invoke
+                    }
+
+                    fun f2(): (Int) -> Int {
+                        return { value: Int -> value.inc() }::invoke
+                    }
+
+                    fun f3(): (((Int) -> Int) -> Unit) -> (Int) -> Int {
+                        return { value: Int -> value.inc() }::also
+                    }
+                    """.trimIndent(),
+                )
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `does not report when parameter type is declared explicitly for un-inferrable lambda wrapped in paren`() {
+            val findings =
+                subject.lint(
+                    """
+                    fun f(): (Int) -> Int {
+                        return ({ value: Int -> value.inc() })::invoke
+                    }
+                    """.trimIndent(),
+                )
+            assertThat(findings).isEmpty()
         }
     }
-})
+
+    @Nested
+    inner class `no parameter declared explicitly` {
+        @Test
+        fun `does not report implicit 'it' parameter usage`() {
+            val findings =
+                subject.lint(
+                    """
+                    fun f() {
+                        val lambda = { i: Int -> i.toString() }
+                        val digits = 1234.let { lambda(it) }.toList()
+                        val flat = listOf(listOf(1), listOf(2)).flatMap { it }
+                    }
+                    """.trimIndent(),
+                )
+            assertThat(findings).isEmpty()
+        }
+    }
+
+    @Nested
+    inner class `multiple parameters one of which with name 'it' declared explicitly` {
+        @Test
+        fun `does not report explicit 'it' parameter usage in multiple parameters`() {
+            val findings = subject.lint(
+                """
+                fun f() {
+                    val lambda = { it: Int, that: String -> it.toString() + that }
+                }
+                """.trimIndent(),
+            )
+            assertThat(findings).isEmpty()
+        }
+    }
+}

@@ -1,117 +1,129 @@
 package io.gitlab.arturbosch.detekt.rules.naming
 
-import io.github.detekt.test.utils.compileContentForTest
+import io.github.detekt.test.utils.compileForTest
+import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.test.TestConfig
 import io.gitlab.arturbosch.detekt.test.assertThat
 import io.gitlab.arturbosch.detekt.test.lint
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
-import java.nio.file.FileSystems
-import java.nio.file.Paths
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import kotlin.io.path.Path
 
 private const val ROOT_PACKAGE = "rootPackage"
+private const val REQUIRE_ROOT_PACKAGE = "requireRootInDeclaration"
 
-internal class InvalidPackageDeclarationSpec : Spek({
+class InvalidPackageDeclarationSpec {
 
-    describe("InvalidPackageDeclaration rule") {
+    @Test
+    fun `should pass if package declaration is correct`() {
+        val ktFile = compileForTest(Path("src/test/resources/InvalidPackageDeclarationSpec/src/foo/bar/correct.kt"))
+        val findings = InvalidPackageDeclaration(Config.empty).lint(ktFile)
 
-        it("should pass if package declaration is correct") {
-            val source = """
-                package foo.bar
+        assertThat(findings).isEmpty()
+    }
 
-                class C
-            """
+    @Test
+    fun `should report if package declaration does not match source location`() {
+        val ktFile = compileForTest(Path("src/test/resources/InvalidPackageDeclarationSpec/src/bar/incorrect.kt"))
+        val findings = InvalidPackageDeclaration(Config.empty).lint(ktFile)
 
-            val ktFile = compileContentForTest(source, createPath("project/src/foo/bar/File.kt"))
-            val findings = InvalidPackageDeclaration().lint(ktFile)
+        assertThat(findings).hasSize(1)
+        assertThat(findings).hasTextLocations(0 to 11)
+    }
+
+    @Nested
+    inner class `with root package specified` {
+
+        val config = TestConfig(ROOT_PACKAGE to "com.example")
+
+        @Test
+        fun `should pass if file is located within the root package`() {
+            val ktFile = compileForTest(Path("src/test/resources/InvalidPackageDeclarationSpec/src/File.kt"))
+            val findings = InvalidPackageDeclaration(config).lint(ktFile)
 
             assertThat(findings).isEmpty()
         }
 
-        it("should report if package declaration does not match source location") {
-            val source = "package foo\n\nclass C"
+        @Test
+        fun `should pass if file is located relative to root package`() {
+            val ktFile = compileForTest(Path("src/test/resources/InvalidPackageDeclarationSpec/src/foo/bar/File.kt"))
+            val findings = InvalidPackageDeclaration(config).lint(ktFile)
 
-            val ktFile = compileContentForTest(source, createPath("project/src/bar/File.kt"))
-            val findings = InvalidPackageDeclaration().lint(ktFile)
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `should pass if file is located in directory corresponding to package declaration`() {
+            val ktFile =
+                compileForTest(
+                    Path("src/test/resources/InvalidPackageDeclarationSpec/src/com/example/foo/bar/File.kt")
+                )
+            val findings = InvalidPackageDeclaration(config).lint(ktFile)
+
+            assertThat(findings).isEmpty()
+        }
+
+        @Test
+        fun `should report if package declaration does not match`() {
+            val ktFile =
+                compileForTest(
+                    Path("src/test/resources/InvalidPackageDeclarationSpec/src/foo/bar/MismatchedDeclaration.kt")
+                )
+            val findings = InvalidPackageDeclaration(config).lint(ktFile)
 
             assertThat(findings).hasSize(1)
-            assertThat(findings).hasTextLocations(0 to 11)
         }
 
-        describe("with root package specified") {
+        @Test
+        fun `should report if file path matches root package but package declaration differs`() {
+            val ktFile =
+                compileForTest(Path("src/test/resources/InvalidPackageDeclarationSpec/src/com/example/File.kt"))
+            val findings = InvalidPackageDeclaration(config).lint(ktFile)
 
-            val config by memoized { TestConfig(mapOf(ROOT_PACKAGE to "com.example")) }
-
-            it("should pass if file is located within the root package") {
-                val source = """
-                    package com.example
-
-                    class C
-                """
-
-                val ktFile = compileContentForTest(source, createPath("src/File.kt"))
-                val findings = InvalidPackageDeclaration(config).lint(ktFile)
-
-                assertThat(findings).isEmpty()
-            }
-
-            it("should pass if file is located relative to root package") {
-                val source = """
-                    package com.example.foo.bar
-
-                    class C
-                """
-
-                val ktFile = compileContentForTest(source, createPath("src/foo/bar/File.kt"))
-                val findings = InvalidPackageDeclaration(config).lint(ktFile)
-
-                assertThat(findings).isEmpty()
-            }
-
-            it("should pass if file is located in directory corresponding to package declaration") {
-                val source = """
-                    package com.example.foo.bar
-
-                    class C
-                """
-
-                val ktFile = compileContentForTest(source, createPath("src/com/example/foo/bar/File.kt"))
-                val findings = InvalidPackageDeclaration(config).lint(ktFile)
-
-                assertThat(findings).isEmpty()
-            }
-
-            it("should report if package declaration does not match") {
-                val source = """
-                    package com.example.foo.baz
-
-                    class C
-                """
-
-                val ktFile = compileContentForTest(source, createPath("src/foo/bar/File.kt"))
-                val findings = InvalidPackageDeclaration(config).lint(ktFile)
-
-                assertThat(findings).hasSize(1)
-            }
-            it("should report if file path matches root package but package declaration differs") {
-                val source = """
-                    package io.foo.bar
-
-                    class C
-                """
-
-                val ktFile = compileContentForTest(source, createPath("src/com/example/File.kt"))
-                val findings = InvalidPackageDeclaration(config).lint(ktFile)
-
-                assertThat(findings).hasSize(1)
-            }
+            assertThat(findings).hasSize(1)
         }
     }
-})
 
-private fun createPath(universalPath: String): String {
-    val pathSegments = universalPath.split('/')
-    val aRootPath = FileSystems.getDefault().rootDirectories.first()
-    val path = Paths.get(aRootPath.toString(), *pathSegments.toTypedArray())
-    return path.toString()
+    @Nested
+    inner class `with root package required` {
+
+        val config = TestConfig(ROOT_PACKAGE to "com.example", REQUIRE_ROOT_PACKAGE to true)
+
+        @Test
+        fun `should pass if declaration starts with root package`() {
+            val ktFileWithRelativePath =
+                compileForTest(Path("src/test/resources/InvalidPackageDeclarationSpec/src/foo/bar/File.kt"))
+            val findingsForRelativePath = InvalidPackageDeclaration(config).lint(ktFileWithRelativePath)
+
+            assertThat(findingsForRelativePath).isEmpty()
+
+            val ktFileWithFullPath =
+                compileForTest(
+                    Path("src/test/resources/InvalidPackageDeclarationSpec/src/com/example/foo/bar/File.kt")
+                )
+            val findingsForFullPath = InvalidPackageDeclaration(config).lint(ktFileWithFullPath)
+
+            assertThat(findingsForFullPath).isEmpty()
+        }
+
+        @Test
+        fun `should report if root package is missing`() {
+            val ktFile =
+                compileForTest(
+                    Path("src/test/resources/InvalidPackageDeclarationSpec/src/foo/bar/rootPackageMissing.kt")
+                )
+            val findings = InvalidPackageDeclaration(config).lint(ktFile)
+
+            assertThat(findings).hasSize(1)
+        }
+
+        @Test
+        fun `should report if declaration only shares a prefix with root package`() {
+            val ktFile =
+                compileForTest(Path("src/test/resources/InvalidPackageDeclarationSpec/src/com/example_extra/File.kt"))
+            val findings = InvalidPackageDeclaration(config).lint(ktFile)
+
+            assertThat(findings).hasSize(1)
+        }
+    }
 }

@@ -1,31 +1,26 @@
 package io.gitlab.arturbosch.detekt.core.rules
 
-import io.gitlab.arturbosch.detekt.api.BaseRule
-import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.RuleId
+import io.gitlab.arturbosch.detekt.api.Rule
 import io.gitlab.arturbosch.detekt.api.RuleSet
 import io.gitlab.arturbosch.detekt.api.RuleSetProvider
 
-internal class SingleRuleProvider(
-    private val ruleId: RuleId,
-    private val wrapped: RuleSetProvider
+internal class SingleRuleProvider private constructor(
+    override val ruleSetId: RuleSet.Id,
+    private val ruleSet: RuleSet,
 ) : RuleSetProvider {
 
-    init {
-        createRuleInstance(Config.empty) // provoke early exit when rule does not exist
+    override fun instance() = ruleSet
+
+    companion object {
+        operator fun invoke(ruleName: Rule.Name, wrapped: RuleSetProvider): SingleRuleProvider {
+            val ruleProvider = requireNotNull(wrapped.instance().rules[ruleName]) {
+                "There was not rule '$ruleName' in rule set '${wrapped.ruleSetId}'."
+            }
+
+            return SingleRuleProvider(
+                ruleSetId = wrapped.ruleSetId,
+                ruleSet = RuleSet(wrapped.ruleSetId, mapOf(ruleName to ruleProvider))
+            )
+        }
     }
-
-    override val ruleSetId: String = wrapped.ruleSetId
-
-    override fun instance(config: Config): RuleSet = RuleSet(
-        ruleSetId,
-        listOf(createRuleInstance(config))
-    )
-
-    private fun createRuleInstance(config: Config): BaseRule =
-        requireNotNull(
-            wrapped.instance(config)
-                .rules
-                .find { it.ruleId == ruleId }
-        ) { "There was no rule '$ruleId' in rule set '${wrapped.ruleSetId}'." }
 }

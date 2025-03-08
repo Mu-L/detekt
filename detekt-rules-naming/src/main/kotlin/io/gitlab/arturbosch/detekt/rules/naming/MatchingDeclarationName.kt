@@ -1,16 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.naming
 
-import io.github.detekt.psi.fileNameWithoutSuffix
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
+import org.jetbrains.kotlin.com.intellij.psi.PsiFile
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtTypeAlias
@@ -48,18 +45,17 @@ import org.jetbrains.kotlin.psi.psiUtil.isPrivate
  * </compliant>
  */
 @ActiveByDefault(since = "1.0.0")
-class MatchingDeclarationName(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "If a source file contains only a single non-private top-level class or object, " +
-            "the file name should reflect the case-sensitive name plus the .kt extension.",
-        Debt.FIVE_MINS
-    )
+class MatchingDeclarationName(config: Config) : Rule(
+    config,
+    "If a source file contains only a single non-private top-level class or object, " +
+        "the file name should reflect the case-sensitive name plus the .kt extension."
+) {
 
     @Configuration("name should only be checked if the file starts with a class or object")
     private val mustBeFirst: Boolean by config(true)
+
+    @Configuration("kotlin multiplatform targets, used to allow file names like `MyClass.jvm.kt`")
+    private val multiplatformTargets: List<String> by config(COMMON_KOTLIN_KMP_PLATFORM_TARGET_SUFFIXES)
 
     override fun visitKtFile(file: KtFile) {
         val declarations = file.declarations
@@ -77,13 +73,12 @@ class MatchingDeclarationName(config: Config = Config.empty) : Rule(config) {
         if (declarations.size == 1 && matchesFirstClassOrObjectCondition()) {
             val declaration = declarations.first()
             val declarationName = declaration.name
-            val filename = file.fileNameWithoutSuffix()
+            val filename = file.fileNameWithoutSuffix(multiplatformTargets)
             if (declarationName != filename && hasNoMatchingTypeAlias(filename)) {
-                val entity = Entity.from(declaration).copy(ktElement = file)
+                val entity = Entity.atName(declaration)
                 report(
-                    CodeSmell(
-                        issue,
-                        entity,
+                    Finding(
+                        Entity(entity.signature, entity.location, file),
                         "The file name '$filename' " +
                             "does not match the name of the single top-level declaration '$declarationName'."
                     )
@@ -91,4 +86,35 @@ class MatchingDeclarationName(config: Config = Config.empty) : Rule(config) {
             }
         }
     }
+
+    companion object {
+
+        private val COMMON_KOTLIN_KMP_PLATFORM_TARGET_SUFFIXES = listOf(
+            "ios",
+            "android",
+            "js",
+            "jvm",
+            "native",
+            "iosArm64",
+            "iosX64",
+            "macosX64",
+            "mingwX64",
+            "linuxX64"
+        )
+    }
+}
+
+/**
+ * Removes kotlin specific file name suffixes, e.g. .kt.
+ * Note, will not remove other possible/known file suffixes like '.java'
+ */
+internal fun PsiFile.fileNameWithoutSuffix(multiplatformTargetSuffixes: List<String> = emptyList()): String {
+    val fileName = this.name
+    val suffixesToRemove = multiplatformTargetSuffixes.map { platform -> ".$platform.kt" } + listOf(".kt", ".kts")
+    for (suffix in suffixesToRemove) {
+        if (fileName.endsWith(suffix)) {
+            return fileName.removeSuffix(suffix)
+        }
+    }
+    return fileName
 }

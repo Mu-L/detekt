@@ -1,15 +1,12 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtThrowExpression
@@ -31,14 +28,10 @@ import org.jetbrains.kotlin.psi.psiUtil.anyDescendantOfType
  * </noncompliant>
  */
 @ActiveByDefault(since = "1.16.0")
-class ExceptionRaisedInUnexpectedLocation(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "ExceptionRaisedInUnexpectedLocation",
-        Severity.CodeSmell,
-        "This method is not expected to throw exceptions. This can cause weird behavior.",
-        Debt.TWENTY_MINS
-    )
+class ExceptionRaisedInUnexpectedLocation(config: Config) : Rule(
+    config,
+    "This method is not expected to throw exceptions. This can cause weird behavior."
+) {
 
     @Configuration("methods which should not throw exceptions")
     private val methodNames: List<String> by config(
@@ -53,10 +46,9 @@ class ExceptionRaisedInUnexpectedLocation(config: Config = Config.empty) : Rule(
     override fun visitNamedFunction(function: KtNamedFunction) {
         if (isPotentialMethod(function) && hasThrowExpression(function.bodyExpression)) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.atName(function),
-                    issue.description
+                    description
                 )
             )
         }

@@ -1,46 +1,67 @@
 package io.gitlab.arturbosch.detekt.core.baseline
 
-import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.Issue
 import io.gitlab.arturbosch.detekt.api.ReportingExtension
-import io.gitlab.arturbosch.detekt.api.RuleSetId
 import io.gitlab.arturbosch.detekt.api.SetupContext
-import io.gitlab.arturbosch.detekt.api.UnstableApi
 import io.gitlab.arturbosch.detekt.api.getOrNull
-import io.gitlab.arturbosch.detekt.core.DetektResult
 import java.nio.file.Path
+import kotlin.io.path.createParentDirectories
+import kotlin.io.path.exists
+import kotlin.io.path.isRegularFile
 
-@OptIn(UnstableApi::class)
 class BaselineResultMapping : ReportingExtension {
 
     private var baselineFile: Path? = null
     private var createBaseline: Boolean = false
+
+    override val id: String = "BaselineResultMapping"
 
     override fun init(context: SetupContext) {
         baselineFile = context.getOrNull(DETEKT_BASELINE_PATH_KEY)
         createBaseline = context.getOrNull(DETEKT_BASELINE_CREATION_KEY) ?: false
     }
 
-    override fun transformFindings(findings: Map<RuleSetId, List<Finding>>): Map<RuleSetId, List<Finding>> {
+    override fun transformIssues(issues: List<Issue>): List<Issue> {
         val baselineFile = baselineFile
         require(!createBaseline || (createBaseline && baselineFile != null)) {
             "Invalid baseline options invariant."
         }
 
-        return baselineFile?.let { findings.transformWithBaseline(it) } ?: findings
+        return baselineFile?.let { issues.transformWithBaseline(it) } ?: issues
     }
 
-    private fun Map<RuleSetId, List<Finding>>.transformWithBaseline(baselinePath: Path): Map<RuleSetId, List<Finding>> {
-        val facade = BaselineFacade()
-        val flatten = this.flatMap { it.value }
-
-        if (flatten.isEmpty()) {
-            return this
-        }
-
+    private fun List<Issue>.transformWithBaseline(
+        baselinePath: Path,
+    ): List<Issue> {
         if (createBaseline) {
-            facade.createOrUpdate(baselinePath, flatten)
+            createOrUpdate(baselinePath, this)
         }
 
-        return facade.transformResult(baselinePath, DetektResult(this)).findings
+        return filterByBaseline(baselinePath, this)
     }
+
+    fun filterByBaseline(baselineFile: Path, issues: List<Issue>): List<Issue> =
+        if (baselineExists(baselineFile)) {
+            val baseline = DefaultBaseline.load(baselineFile)
+            issues.filterNot { baseline.contains(it.baselineId) }
+        } else {
+            issues
+        }
+
+    fun createOrUpdate(baselineFile: Path, issues: List<Issue>) {
+        val ids = issues.map { it.baselineId }.toSortedSet()
+        val oldBaseline = if (baselineExists(baselineFile)) {
+            DefaultBaseline.load(baselineFile)
+        } else {
+            DefaultBaseline(emptySet(), emptySet())
+        }
+        val baselineFormat = BaselineFormat()
+        val baseline = baselineFormat.of(oldBaseline.manuallySuppressedIssues, ids)
+        if (oldBaseline != baseline) {
+            baselineFile.createParentDirectories()
+            baselineFormat.write(baselineFile, baseline)
+        }
+    }
+
+    private fun baselineExists(baseline: Path) = baseline.exists() && baseline.isRegularFile()
 }

@@ -1,12 +1,9 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import io.gitlab.arturbosch.detekt.rules.isMainFunction
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtThrowExpression
@@ -23,18 +20,14 @@ import org.jetbrains.kotlin.psi.psiUtil.anyDescendantOfType
  * }
  * </noncompliant>
  */
-class ThrowingExceptionInMain(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "ThrowingExceptionInMain",
-        Severity.CodeSmell,
-        "The main method should not throw an exception.",
-        Debt.TWENTY_MINS
-    )
+class ThrowingExceptionInMain(config: Config) : Rule(
+    config,
+    "The main method should not throw an exception."
+) {
 
     override fun visitNamedFunction(function: KtNamedFunction) {
         if (function.isMainFunction() && containsThrowExpression(function)) {
-            report(CodeSmell(issue, Entity.atName(function), issue.description))
+            report(Finding(Entity.atName(function), description))
         }
     }
 

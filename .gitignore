@@ -37,7 +37,7 @@ local.properties
 # PDT-specific
 .buildpath
 
-# sbteclipse plugin 
+# sbteclipse plugin
 .target
 
 # TeXlipse plugin
@@ -54,6 +54,9 @@ local.properties
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+### Kotlin ###
+.kotlin
 
 ### LaTeX ###
 *.acn
@@ -158,14 +161,9 @@ target/
 /detekt-cli/src/test/kotlin/io/gitlab/arturbosch/detekt/cli/Test.kt
 *.iml
 */out
-/docs/_site
-/docs/.bundle
 
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar
 
-# Avoid committing generated documentation to the repo
-/docs/pages/documentation
-/docs/pages/kdoc
-/docs/pages/gettingstarted/cli-options.md
-/docs/vendor/
+# VSCode
+.vscode

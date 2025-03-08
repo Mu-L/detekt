@@ -8,13 +8,13 @@ object LLOC {
     fun analyze(
         lines: List<String>,
         isCommentMode: Boolean = false,
-        isFullMode: Boolean = false
+        isFullMode: Boolean = false,
     ): Int = LLOCCounter(lines, isCommentMode, isFullMode).run()
 
     private class LLOCCounter(
         private val lines: List<String>,
         private val isCommentMode: Boolean = false,
-        private val isFullMode: Boolean = false
+        private val isFullMode: Boolean = false,
     ) {
 
         private var counter = 0
@@ -77,9 +77,7 @@ object LLOC {
             }
         }
 
-        private fun isEscaped(trimmed: String, rules: Array<String>): Boolean {
-            return rules.any { trimmed.startsWith(it) }
-        }
+        private fun isEscaped(trimmed: String, rules: Array<String>): Boolean = rules.any { trimmed.startsWith(it) }
 
         private fun frequency(source: String, part: String): Int {
             if (source.isEmpty() || part.isEmpty()) {

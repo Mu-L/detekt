@@ -1,12 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.exceptions
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.psi.KtBinaryExpressionWithTypeRHS
 import org.jetbrains.kotlin.psi.KtCatchClause
 import org.jetbrains.kotlin.psi.KtExpression
@@ -43,21 +42,20 @@ import org.jetbrains.kotlin.types.typeUtil.isSubtypeOf
  * }
  * </compliant>
  */
-class InstanceOfCheckForException(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "InstanceOfCheckForException",
-        Severity.CodeSmell,
-        "Instead of checking for a general exception type and checking for a specific exception type " +
-            "use multiple catch blocks.",
-        Debt.TWENTY_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class InstanceOfCheckForException(config: Config) :
+    Rule(
+        config,
+        "Instead of catching for a general exception type and checking for a specific exception type, " +
+            "use multiple catch blocks."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitCatchSection(catchClause: KtCatchClause) {
         val catchParameter = catchClause.catchParameter ?: return
         catchClause.catchBody?.forEachDescendantOfType<KtExpression> {
             if (it.isCheckForSubTypeOf(catchParameter)) {
-                report(CodeSmell(issue, Entity.from(it), issue.description))
+                report(Finding(Entity.from(it), description))
             }
         }
     }

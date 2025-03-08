@@ -1,10 +1,13 @@
 package io.github.detekt.tooling.api
 
+import io.github.detekt.tooling.api.spec.ExtensionsSpec
 import io.gitlab.arturbosch.detekt.api.Config
 import java.nio.file.Path
 import java.util.ServiceLoader
 
 interface DefaultConfigurationProvider {
+
+    fun init(extensionsSpec: ExtensionsSpec)
 
     fun get(): Config
 
@@ -13,8 +16,11 @@ interface DefaultConfigurationProvider {
     companion object {
 
         fun load(
-            classLoader: ClassLoader = DefaultConfigurationProvider::class.java.classLoader
+            extensionsSpec: ExtensionsSpec,
+            classLoader: ClassLoader = DefaultConfigurationProvider::class.java.classLoader,
         ): DefaultConfigurationProvider =
-            ServiceLoader.load(DefaultConfigurationProvider::class.java, classLoader).first()
+            ServiceLoader.load(DefaultConfigurationProvider::class.java, classLoader)
+                .first()
+                .apply { init(extensionsSpec) }
     }
 }

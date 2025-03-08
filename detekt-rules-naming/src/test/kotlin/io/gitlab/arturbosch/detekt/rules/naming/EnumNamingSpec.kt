@@ -1,56 +1,77 @@
 package io.gitlab.arturbosch.detekt.rules.naming
 
+import io.gitlab.arturbosch.detekt.api.Config
+import io.gitlab.arturbosch.detekt.test.TestConfig
 import io.gitlab.arturbosch.detekt.test.assertThat
-import io.gitlab.arturbosch.detekt.test.compileAndLint
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import io.gitlab.arturbosch.detekt.test.lint
+import org.junit.jupiter.api.Test
 
-class EnumNamingSpec : Spek({
+class EnumNamingSpec {
 
-    describe("some enum entry declarations") {
-
-        it("should detect no violation") {
-            val findings = EnumNaming().compileAndLint(
+    @Test
+    fun `should use custom name for enum`() {
+        val rule = EnumNaming(TestConfig(EnumNaming.ENUM_PATTERN to "^(enum1)|(enum2)$"))
+        assertThat(
+            rule.lint(
                 """
+                    enum class aBbD {
+                        enum1, enum2
+                    }
+                """.trimIndent()
+            )
+        ).isEmpty()
+    }
+
+    @Test
+    fun `should detect no violation`() {
+        val findings = EnumNaming(Config.empty).lint(
+            """
                 enum class WorkFlow {
                     ACTIVE, NOT_ACTIVE, Unknown, Number1
                 }
-                """
-            )
-            assertThat(findings).isEmpty()
-        }
-
-        it("enum name that start with lowercase") {
-            val code = """
-                enum class WorkFlow {
-                    default
-                }"""
-            assertThat(NamingRules().compileAndLint(code)).hasSize(1)
-        }
-
-        it("reports an underscore in enum name") {
-            val code = """
-                enum class WorkFlow {
-                    _Default
-                }"""
-            assertThat(EnumNaming().compileAndLint(code)).hasSize(1)
-        }
-
-        it("no reports an underscore in enum name because it's suppressed") {
-            val code = """
-                enum class WorkFlow {
-                    @Suppress("EnumNaming") _Default
-                }"""
-            assertThat(EnumNaming().compileAndLint(code)).isEmpty()
-        }
-
-        it("reports the correct text location in enum name") {
-            val code = """
-                enum class WorkFlow {
-                    _Default,
-                }"""
-            val findings = EnumNaming().compileAndLint(code)
-            assertThat(findings).hasTextLocations(26 to 34)
-        }
+            """.trimIndent()
+        )
+        assertThat(findings).isEmpty()
     }
-})
+
+    @Test
+    fun `enum name that start with lowercase`() {
+        val code = """
+            enum class WorkFlow {
+                default
+            }
+        """.trimIndent()
+        assertThat(EnumNaming(Config.empty).lint(code)).hasSize(1)
+    }
+
+    @Test
+    fun `reports an underscore in enum name`() {
+        val code = """
+            enum class WorkFlow {
+                _Default
+            }
+        """.trimIndent()
+        assertThat(EnumNaming(Config.empty).lint(code)).hasSize(1)
+    }
+
+    @Test
+    fun `no reports an underscore in enum name because it's suppressed`() {
+        val code = """
+            enum class WorkFlow {
+                @Suppress("EnumNaming") _Default
+            }
+        """.trimIndent()
+        assertThat(EnumNaming(Config.empty).lint(code)).isEmpty()
+    }
+
+    @Test
+    fun `reports the correct text location in enum name`() {
+        val code = """
+            enum class WorkFlow {
+                _Default,
+            }
+        """.trimIndent()
+        val findings = EnumNaming(Config.empty).lint(code)
+        assertThat(findings).hasTextLocations(26 to 34)
+    }
+}

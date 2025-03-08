@@ -1,41 +1,42 @@
 package io.gitlab.arturbosch.detekt.extensions
 
-import groovy.lang.Closure
 import io.gitlab.arturbosch.detekt.extensions.DetektReportType.HTML
+import io.gitlab.arturbosch.detekt.extensions.DetektReportType.MD
 import io.gitlab.arturbosch.detekt.extensions.DetektReportType.SARIF
-import io.gitlab.arturbosch.detekt.extensions.DetektReportType.TXT
 import io.gitlab.arturbosch.detekt.extensions.DetektReportType.XML
+import org.gradle.api.Action
 import org.gradle.api.model.ObjectFactory
-import org.gradle.util.ConfigureUtil
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Nested
 import javax.inject.Inject
 
 @Suppress("TooManyFunctions")
-open class DetektReports @Inject constructor(val objects: ObjectFactory) {
+open class DetektReports @Inject constructor(@get:Internal val objects: ObjectFactory) {
 
-    val xml: DetektReport = objects.newInstance(DetektReport::class.java, XML)
+    @get:Nested
+    open val xml: DetektReport = objects.newInstance(DetektReport::class.java, XML)
 
-    val html: DetektReport = objects.newInstance(DetektReport::class.java, HTML)
+    @get:Nested
+    open val html: DetektReport = objects.newInstance(DetektReport::class.java, HTML)
 
-    val txt: DetektReport = objects.newInstance(DetektReport::class.java, TXT)
+    @get:Nested
+    open val sarif: DetektReport = objects.newInstance(DetektReport::class.java, SARIF)
 
-    val sarif: DetektReport = objects.newInstance(DetektReport::class.java, SARIF)
+    @get:Nested
+    open val md: DetektReport = objects.newInstance(DetektReport::class.java, MD)
 
-    val custom = mutableListOf<CustomDetektReport>()
+    @get:Nested
+    open val custom = mutableListOf<CustomDetektReport>()
 
-    fun xml(configure: DetektReport.() -> Unit): Unit = xml.configure()
-    fun xml(closure: Closure<*>): DetektReport = ConfigureUtil.configure(closure, xml)
+    fun xml(action: Action<in DetektReport>): Unit = action.execute(xml)
 
-    fun html(configure: DetektReport.() -> Unit): Unit = html.configure()
-    fun html(closure: Closure<*>): DetektReport = ConfigureUtil.configure(closure, html)
+    fun html(action: Action<in DetektReport>): Unit = action.execute(html)
 
-    fun txt(configure: DetektReport.() -> Unit): Unit = txt.configure()
-    fun txt(closure: Closure<*>): DetektReport = ConfigureUtil.configure(closure, txt)
+    fun sarif(action: Action<in DetektReport>): Unit = action.execute(sarif)
 
-    fun sarif(configure: DetektReport.() -> Unit): Unit = sarif.configure()
-    fun sarif(closure: Closure<*>): DetektReport = ConfigureUtil.configure(closure, sarif)
+    fun md(action: Action<in DetektReport>): Unit = action.execute(md)
 
-    fun custom(configure: CustomDetektReport.() -> Unit): Unit = createAndAddCustomReport().configure()
-    fun custom(closure: Closure<*>): CustomDetektReport = ConfigureUtil.configure(closure, createAndAddCustomReport())
+    fun custom(action: Action<in CustomDetektReport>): Unit = action.execute(createAndAddCustomReport())
 
     private fun createAndAddCustomReport() =
         objects.newInstance(CustomDetektReport::class.java).apply { custom.add(this) }

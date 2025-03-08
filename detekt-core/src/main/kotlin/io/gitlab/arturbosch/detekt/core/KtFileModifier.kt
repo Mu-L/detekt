@@ -1,35 +1,37 @@
 package io.gitlab.arturbosch.detekt.core
 
-import io.github.detekt.psi.LINE_SEPARATOR
 import io.github.detekt.psi.absolutePath
 import io.gitlab.arturbosch.detekt.api.Detektion
 import io.gitlab.arturbosch.detekt.api.FileProcessListener
 import io.gitlab.arturbosch.detekt.api.Notification
+import io.gitlab.arturbosch.detekt.api.modifiedText
 import org.jetbrains.kotlin.com.intellij.openapi.util.text.StringUtilRt
-import org.jetbrains.kotlin.fileClasses.javaFileFacadeFqName
 import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.resolve.BindingContext
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.writeText
 
 class KtFileModifier : FileProcessListener {
 
-    override fun onFinish(files: List<KtFile>, result: Detektion, bindingContext: BindingContext) {
-        files.filter { it.modificationStamp > 0 }
-            .map { it.absolutePath() to it.unnormalizeContent() }
-            .forEach {
-                result.add(ModificationNotification(it.first))
-                Files.write(it.first, it.second.toByteArray())
+    override val id: String = "KtFileModifier"
+
+    override fun onFinish(files: List<KtFile>, result: Detektion) {
+        files.filter { it.modifiedText != null }
+            .forEach { ktFile ->
+                val path = ktFile.absolutePath()
+                result.add(ModificationNotification(path))
+                path.writeText(ktFile.unnormalizeContent())
+                // reset modification text after writing as the PsiFile may be reused in tests or an IDE session
+                ktFile.modifiedText = null
             }
     }
 
-    private fun KtFile.unnormalizeContent(): String {
-        val lineSeparator = getUserData(LINE_SEPARATOR)
-        requireNotNull(lineSeparator) {
-            "No line separator entry for ktFile ${javaFileFacadeFqName.asString()}"
-        }
-        return StringUtilRt.convertLineSeparators(text, lineSeparator)
-    }
+    private fun KtFile.unnormalizeContent(): String =
+        StringUtilRt.convertLineSeparators(
+            checkNotNull(modifiedText),
+            checkNotNull(virtualFile.detectedLineSeparator) {
+                "Line separator was not automatically detected. This is unexpected."
+            }
+        )
 }
 
 private class ModificationNotification(path: Path) : Notification {

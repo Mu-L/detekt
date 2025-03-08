@@ -1,12 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.KtNodeTypes
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.psi.KtCallExpression
@@ -28,6 +26,7 @@ import org.jetbrains.kotlin.types.typeUtil.isLong
  * Based on code from Kotlin compiler:
  * https://github.com/JetBrains/kotlin/blob/v1.3.50/idea/src/org/jetbrains/kotlin/idea/inspections/RedundantExplicitTypeInspection.kt
  */
+
 /**
  * Local properties do not need their type to be explicitly provided when the inferred type matches the explicit type.
  *
@@ -43,22 +42,18 @@ import org.jetbrains.kotlin.types.typeUtil.isLong
  * }
  * </compliant>
  */
-class RedundantExplicitType(config: Config) : Rule(config) {
-
-    override val issue = Issue(
-        "RedundantExplicitType",
-        Severity.Style,
-        "Type does not need to be stated explicitly and can be removed.",
-        Debt.FIVE_MINS
-    )
+class RedundantExplicitType(config: Config) :
+    Rule(
+        config,
+        "Type does not need to be stated explicitly and can be removed."
+    ),
+    RequiresFullAnalysis {
 
     @Suppress("ReturnCount", "ComplexMethod")
     override fun visitProperty(property: KtProperty) {
-        if (bindingContext == BindingContext.EMPTY) return
         if (!property.isLocal) return
         val typeReference = property.typeReference ?: return
-        val type =
-            (bindingContext[BindingContext.VARIABLE, property])?.type ?: return
+        val type = (bindingContext[BindingContext.VARIABLE, property])?.type ?: return
         if (type is AbbreviatedType) return
 
         when (val initializer = property.initializer) {
@@ -68,7 +63,7 @@ class RedundantExplicitType(config: Config) : Rule(config) {
             is KtCallExpression -> if (typeReference.text != initializer.calleeExpression?.text) return
             else -> return
         }
-        report(CodeSmell(issue, Entity.atName(property), issue.description))
+        report(Finding(Entity.atName(property), description))
         super.visitProperty(property)
     }
 

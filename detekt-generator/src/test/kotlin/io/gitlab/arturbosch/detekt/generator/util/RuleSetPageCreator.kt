@@ -2,6 +2,7 @@ package io.gitlab.arturbosch.detekt.generator.util
 
 import io.gitlab.arturbosch.detekt.generator.collection.Active
 import io.gitlab.arturbosch.detekt.generator.collection.Configuration
+import io.gitlab.arturbosch.detekt.generator.collection.DefaultValue.Companion.of
 import io.gitlab.arturbosch.detekt.generator.collection.Inactive
 import io.gitlab.arturbosch.detekt.generator.collection.Rule
 import io.gitlab.arturbosch.detekt.generator.collection.RuleSetPage
@@ -19,35 +20,35 @@ internal fun createRuleSetPage(): RuleSetPage {
                 Configuration(
                     name = "rulesetconfig1",
                     description = "description rulesetconfig1",
-                    defaultValue = "true",
+                    defaultValue = of(true),
                     defaultAndroidValue = null,
                     deprecated = null
                 ),
                 Configuration(
                     name = "rulesetconfig2",
                     description = "description rulesetconfig2",
-                    defaultValue = "['foo', 'bar']",
+                    defaultValue = of(listOf("foo", "bar")),
                     defaultAndroidValue = null,
                     deprecated = null
                 ),
                 Configuration(
                     name = "deprecatedSimpleConfig",
                     description = "description deprecatedSimpleConfig",
-                    defaultValue = "true",
+                    defaultValue = of(true),
                     defaultAndroidValue = null,
                     deprecated = "is deprecated"
                 ),
                 Configuration(
                     name = "deprecatedListConfig",
                     description = "description deprecatedListConfig",
-                    defaultValue = "['foo', 'bar']",
+                    defaultValue = of(listOf("foo", "bar")),
                     defaultAndroidValue = null,
                     deprecated = "is deprecated"
                 ),
                 Configuration(
                     name = "rulesetconfig3",
                     description = "description rulesetconfig2",
-                    defaultValue = "['first', 'se*cond']",
+                    defaultValue = of(listOf("first", "se*cond")),
                     defaultAndroidValue = null,
                     deprecated = null
                 )
@@ -58,21 +59,19 @@ internal fun createRuleSetPage(): RuleSetPage {
 
 internal fun createRules(): List<Rule> {
     val rule1 = Rule(
-        name = "WildcardImport",
+        name = "MagicNumber",
         description = "a wildcard import",
         nonCompliantCodeExample = "import foo.*",
         compliantCodeExample = "import foo.bar",
         defaultActivationStatus = Active(since = "1.0.0"),
-        severity = "Defect",
-        debt = "10min",
-        aliases = "alias1, alias2",
+        aliases = listOf("alias1", "alias2"),
         parent = "",
-        configuration = listOf(
-            Configuration("conf1", "a config option", "foo", null, null),
-            Configuration("conf2", "deprecated config", "false", null, "use conf1 instead"),
-            Configuration("conf3", "list config", "['a', 'b']", null, null),
-            Configuration("conf4", "deprecated list config", "['a', 'b']", null, "use conf3 instead"),
-            Configuration("conf5", "rule with android variants", "120", "100", null),
+        configurations = listOf(
+            Configuration("conf1", "a config option", of("foo"), null, null),
+            Configuration("conf2", "deprecated config", of(false), null, "use conf1 instead"),
+            Configuration("conf3", "list config", of(listOf("a", "b")), null, null),
+            Configuration("conf4", "deprecated list config", of(listOf("a", "b")), null, "use conf3 instead"),
+            Configuration("conf5", "rule with android variants", of(120), of(100), null),
         )
     )
     val rule2 = Rule(
@@ -81,11 +80,9 @@ internal fun createRules(): List<Rule> {
         nonCompliantCodeExample = "",
         compliantCodeExample = "",
         defaultActivationStatus = Inactive,
-        severity = "",
-        debt = "",
-        aliases = null,
+        aliases = emptyList(),
         parent = "WildcardImport",
-        configuration = emptyList()
+        configurations = emptyList()
     )
     val rule3 = Rule(
         name = "NoUnitKeyword",
@@ -93,13 +90,21 @@ internal fun createRules(): List<Rule> {
         nonCompliantCodeExample = "fun stuff(): Unit {}",
         compliantCodeExample = "fun stuff() {}",
         defaultActivationStatus = Active(since = "1.16.0"),
-        severity = "",
-        debt = "5m",
-        aliases = null,
+        aliases = emptyList(),
         parent = "",
-        configuration = emptyList(),
+        configurations = emptyList(),
         autoCorrect = true,
-        requiresTypeResolution = true
+        requiresFullAnalysis = true
     )
-    return listOf(rule1, rule2, rule3)
+    val rule4 = Rule(
+        name = "DuplicateCaseInWhenExpression",
+        description = "Duplicated `case` statements in a `when` expression detected.",
+        nonCompliantCodeExample = "fun stuff(): Unit {}",
+        compliantCodeExample = "fun stuff() {}",
+        defaultActivationStatus = Active(since = "1.16.0"),
+        aliases = emptyList(),
+        parent = "",
+        deprecationMessage = "is deprecated"
+    )
+    return listOf(rule1, rule2, rule3, rule4)
 }

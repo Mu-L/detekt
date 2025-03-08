@@ -1,22 +1,17 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import io.gitlab.arturbosch.detekt.rules.fqNameOrNull
-import io.gitlab.arturbosch.detekt.rules.safeAs
 import org.jetbrains.kotlin.psi.KtBinaryExpressionWithTypeRHS
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtIsExpression
 import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.psi.KtUserType
-import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.callUtil.getType
+import org.jetbrains.kotlin.resolve.calls.util.getType
 
 /**
  * Down-casting immutable types from kotlin.collections should be discouraged.
@@ -38,27 +33,21 @@ import org.jetbrains.kotlin.resolve.calls.callUtil.getType
  * </compliant>
  *
  */
-@RequiresTypeResolution
-class DontDowncastCollectionTypes(config: Config) : Rule(config) {
-
-    override val issue = Issue(
-        "DontDowncastCollectionTypes",
-        Severity.Warning,
-        "Down-casting immutable collection types is breaking the collection contract",
-        Debt.TEN_MINS
-    )
+class DontDowncastCollectionTypes(config: Config) :
+    Rule(
+        config,
+        "Down-casting immutable collection types is breaking the collection contract."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitIsExpression(expression: KtIsExpression) {
         super.visitIsExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
 
         checkForDowncast(expression, expression.leftHandSide, expression.typeReference)
     }
 
     override fun visitBinaryWithTypeRHSExpression(expression: KtBinaryExpressionWithTypeRHS) {
         super.visitBinaryWithTypeRHSExpression(expression)
-
-        if (bindingContext == BindingContext.EMPTY) return
 
         checkForDowncast(expression, expression.left, expression.right)
     }
@@ -72,7 +61,7 @@ class DontDowncastCollectionTypes(config: Config) : Rule(config) {
 
         val rhsType = right
             ?.typeElement
-            ?.safeAs<KtUserType>()
+            ?.let { it as? KtUserType }
             ?.referencedName
 
         if (lhsType in immutableTypes && rhsType in mutableTypes) {
@@ -80,7 +69,7 @@ class DontDowncastCollectionTypes(config: Config) : Rule(config) {
             if (rhsType != null && rhsType.startsWith("Mutable")) {
                 message += " Use `to$rhsType()` instead."
             }
-            report(CodeSmell(issue, Entity.from(parent), message))
+            report(Finding(Entity.from(parent), message))
         }
     }
 

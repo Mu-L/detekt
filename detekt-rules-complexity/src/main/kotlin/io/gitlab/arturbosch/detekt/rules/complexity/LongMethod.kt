@@ -1,21 +1,17 @@
 package io.gitlab.arturbosch.detekt.rules.complexity
 
 import io.github.detekt.metrics.linesOfCode
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
-import io.gitlab.arturbosch.detekt.api.Metric
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.ThresholdedCodeSmell
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
+import org.jetbrains.kotlin.com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
-import org.jetbrains.kotlin.utils.addToStdlib.flattenTo
 import java.util.IdentityHashMap
 
 /**
@@ -25,18 +21,14 @@ import java.util.IdentityHashMap
  * Extract parts of the functionality of long methods into separate, smaller methods.
  */
 @ActiveByDefault(since = "1.0.0")
-class LongMethod(config: Config = Config.empty) : Rule(config) {
+class LongMethod(config: Config) : Rule(
+    config,
+    "One method should have one responsibility. Long methods tend to handle many things at once. " +
+        "Prefer smaller methods to make them easier to understand."
+) {
 
-    override val issue = Issue(
-        "LongMethod",
-        Severity.Maintainability,
-        "One method should have one responsibility. Long methods tend to handle many things at once. " +
-            "Prefer smaller methods to make them easier to understand.",
-        Debt.TWENTY_MINS
-    )
-
-    @Configuration("number of lines in a method to trigger the rule")
-    private val threshold: Int by config(defaultValue = 60)
+    @Configuration("number of lines in a method that are allowed at maximum")
+    private val allowedLines: Int by config(defaultValue = 60)
 
     private val functionToLinesCache = HashMap<KtNamedFunction, Int>()
     private val functionToBodyLinesCache = HashMap<KtNamedFunction, Int>()
@@ -52,18 +44,19 @@ class LongMethod(config: Config = Config.empty) : Rule(config) {
         val functionToLines = HashMap<KtNamedFunction, Int>()
         functionToLinesCache.map { (function, lines) ->
             val isNested = function.getStrictParentOfType<KtNamedFunction>() != null
-            if (isNested) functionToLines[function] = functionToBodyLinesCache[function] ?: 0
-            else functionToLines[function] = lines
+            if (isNested) {
+                functionToLines[function] = functionToBodyLinesCache[function] ?: 0
+            } else {
+                functionToLines[function] = lines
+            }
         }
         for ((function, lines) in functionToLines) {
-            if (lines >= threshold) {
+            if (lines > allowedLines) {
                 report(
-                    ThresholdedCodeSmell(
-                        issue,
+                    Finding(
                         Entity.atName(function),
-                        Metric("SIZE", lines, threshold),
                         "The function ${function.nameAsSafeName} is too long ($lines). " +
-                            "The maximum length is $threshold."
+                            "The maximum length is $allowedLines."
                     )
                 )
             }
@@ -78,17 +71,10 @@ class LongMethod(config: Config = Config.empty) : Rule(config) {
         functionToBodyLinesCache[function] = bodyEntity?.linesOfCode() ?: 0
         parentMethods?.let { nestedFunctionTracking.getOrPut(it) { HashSet() }.add(function) }
         super.visitNamedFunction(function)
-        findAllNestedFunctions(function)
+
+        PsiTreeUtil.findChildrenOfType(function, KtNamedFunction::class.java)
             .fold(0) { acc, next -> acc + (functionToLinesCache[next] ?: 0) }
             .takeIf { it > 0 }
             ?.let { functionToLinesCache[function] = lines - it }
-    }
-
-    private fun findAllNestedFunctions(startFunction: KtNamedFunction): Sequence<KtNamedFunction> = sequence {
-        var nestedFunctions = nestedFunctionTracking[startFunction]
-        while (!nestedFunctions.isNullOrEmpty()) {
-            yieldAll(nestedFunctions)
-            nestedFunctions = nestedFunctions.mapNotNull { nestedFunctionTracking[it] }.flattenTo(HashSet())
-        }
     }
 }

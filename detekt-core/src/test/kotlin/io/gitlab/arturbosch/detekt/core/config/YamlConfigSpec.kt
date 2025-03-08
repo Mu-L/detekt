@@ -1,8 +1,7 @@
-@file:Suppress("detekt.MaxLineLength")
-
 package io.gitlab.arturbosch.detekt.core.config
 
 import io.github.detekt.test.utils.resourceAsPath
+import io.github.detekt.utils.getSafeResourceAsStream
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.test.yamlConfig
 import io.gitlab.arturbosch.detekt.test.yamlConfigFromContent
@@ -10,18 +9,20 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatCode
 import org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import org.assertj.core.api.Assertions.assertThatIllegalStateException
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
-import org.yaml.snakeyaml.parser.ParserException
-import java.nio.file.Paths
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.snakeyaml.engine.v2.exceptions.ParserException
+import kotlin.io.path.Path
 
-class YamlConfigSpec : Spek({
+class YamlConfigSpec {
 
-    describe("load yaml config") {
+    @Nested
+    inner class `load yaml config` {
 
-        val config by memoized { yamlConfig("detekt.yml") }
+        private val config = yamlConfig("detekt.yml")
 
-        it("should create a sub config") {
+        @Test
+        fun `should create a sub config`() {
             val subConfig = config.subConfig("style")
             assertThat(subConfig.valueOrDefault("WildcardImport", emptyMap<String, Any>())).isNotEmpty
             assertThat(
@@ -40,94 +41,211 @@ class YamlConfigSpec : Spek({
             assertThat(subConfig.valueOrDefault("NotFound", "")).isEmpty()
         }
 
-        it("should create a sub sub config") {
+        @Test
+        fun `should create a sub sub config`() {
             val subConfig = config.subConfig("style")
             val subSubConfig = subConfig.subConfig("WildcardImport")
             assertThat(subSubConfig.valueOrDefault("active", false)).isTrue()
             assertThat(subSubConfig.valueOrDefault("NotFound", true)).isTrue()
         }
 
-        it("tests wrong sub config conversion") {
+        @Test
+        fun `tests wrong sub config conversion`() {
             assertThatIllegalStateException().isThrownBy {
                 @Suppress("UNUSED_VARIABLE")
                 val ignored = config.valueOrDefault("style", "")
-            }.withMessage("Value \"{WildcardImport={active=true}, NoElseInWhenExpression={active=true}, MagicNumber={active=true, ignoreNumbers=[-1, 0, 1, 2]}}\" set for config parameter \"style\" is not of required type String.")
+            }
+                .withMessage(
+                    "Value \"{WildcardImport={active=true}, NoElseInWhenExpression={active=true}, MagicNumber={active=true, ignoreNumbers=[-1, 0, 1, 2]}}\" set for config parameter \"style\" is not of required type String."
+                )
+        }
+
+        @Test
+        fun `parent path of ruleset config is ruleset id`() {
+            val rulesetId = "style"
+            val subject = config.subConfig(rulesetId)
+            val actual = subject.parentPath
+            assertThat(actual).isEqualTo(rulesetId)
+        }
+
+        @Test
+        fun `parent returns the original config`() {
+            val rulesetId = "style"
+            val subject = config.subConfig(rulesetId)
+            val actual = subject.parent
+            assertThat(actual).isEqualTo(config)
+        }
+
+        @Test
+        fun `subConfigs returns all sub configs`() {
+            val subject = config.subConfig("style")
+            val actual = subject.subConfigKeys()
+            assertThat(actual).containsExactly("WildcardImport", "NoElseInWhenExpression", "MagicNumber")
         }
     }
 
-    describe("loading empty configurations") {
+    @Nested
+    inner class `loading empty configurations` {
 
-        it("empty yaml file is equivalent to empty config") {
-            YamlConfig.loadResource(javaClass.getResource("/empty.yml"))
+        @Test
+        fun `empty yaml file is equivalent to empty config`() {
+            javaClass.getSafeResourceAsStream("/empty.yml")!!.reader().use(YamlConfig::load)
         }
 
-        it("single item in yaml file is valid") {
-            YamlConfig.loadResource(javaClass.getResource("/oneitem.yml"))
+        @Test
+        fun `single item in yaml file is valid`() {
+            javaClass.getSafeResourceAsStream("/oneitem.yml")!!.reader().use(YamlConfig::load)
         }
     }
 
-    describe("meaningful error messages") {
+    @Nested
+    inner class `meaningful error messages` {
 
-        val config by memoized { yamlConfig("wrong-property-type.yml") }
+        private val config = yamlConfigFromContent(
+            """
+                RuleSet:
+                  Rule:
+                    active: []
+                    threshold: v5.7
+                
+                bool: fasle
+            """.trimIndent()
+        )
 
-        it("only accepts true and false boolean values") {
+        @Test
+        fun `only accepts true and false boolean values`() {
             assertThatIllegalStateException()
                 .isThrownBy { config.valueOrDefault("bool", false) }
                 .withMessage("""Value "fasle" set for config parameter "bool" is not of required type Boolean.""")
         }
 
-        it("prints whole config-key path for NumberFormatException") {
+        @Test
+        fun `prints whole config-key path for NumberFormatException`() {
             assertThatIllegalStateException().isThrownBy {
                 config.subConfig("RuleSet")
                     .subConfig("Rule")
                     .valueOrDefault("threshold", 6)
-            }.withMessage("Value \"v5.7\" set for config parameter \"RuleSet > Rule > threshold\" is not of required type Int.")
+            }
+                .withMessage(
+                    "Value \"v5.7\" set for config parameter \"RuleSet > Rule > threshold\" is not of required type Int."
+                )
         }
 
-        it("prints whole config-key path for ClassCastException") {
+        @Test
+        fun `prints whole config-key path for ClassCastException`() {
             assertThatIllegalStateException().isThrownBy {
                 @Suppress("UNUSED_VARIABLE")
                 val bool: Int = config.subConfig("RuleSet")
                     .subConfig("Rule")
                     .valueOrDefault("active", 1)
-            }.withMessage("Value \"[]\" set for config parameter \"RuleSet > Rule > active\" is not of required type Int.")
+            }
+                .withMessage(
+                    "Value \"[]\" set for config parameter \"RuleSet > Rule > active\" is not of required type Int."
+                )
+        }
+
+        @Test
+        fun `prints meaningful message when list of ints is used instead of list of strings`() {
+            assertThatIllegalStateException().isThrownBy {
+                config.valueOrDefaultInternal(key = "key", result = listOf(1, 2), default = listOf("1", "2"))
+            }.withMessage(
+                "Only lists of strings are supported. " +
+                    "Value \"[1, 2]\" set for config parameter \"key\" contains non-string values."
+            )
+        }
+
+        @Test
+        fun `prints meaningful message when string is used instead of list of strings`() {
+            assertThatIllegalStateException().isThrownBy {
+                config.valueOrDefaultInternal(key = "key", result = "", default = emptyList<String>())
+            }.withMessage(
+                """
+                    Value "" set for config parameter "key" is not of required type List.
+                """.trimIndent()
+            )
         }
     }
 
-    describe("yaml config") {
+    @Nested
+    inner class `yaml config` {
 
-        it("loads the config from a given yaml file") {
+        @Test
+        fun `loads the config from a given yaml file`() {
             val path = resourceAsPath("detekt.yml")
             val config = YamlConfig.load(path)
             assertThat(config).isNotNull
         }
 
-        it("loads the config from a given text file") {
+        @Test
+        fun `loads the config from a given text file`() {
             val path = resourceAsPath("detekt.txt")
             val config = YamlConfig.load(path)
             assertThat(config).isNotNull
         }
 
-        it("throws an exception on an non-existing file") {
-            val path = Paths.get("doesNotExist.yml")
+        @Nested
+        inner class `Values with reason` {
+            private val config = YamlConfig.load(resourceAsPath("values-with-reason.yml"))
+
+            @Test
+            fun `can be parsed`() {
+                assertThat(config).isNotNull
+            }
+
+            @Test
+            fun `supports lists`() {
+                val actualAsList: List<*>? = config
+                    .subConfig("style")
+                    .subConfig("AsList")
+                    .valueOrNull("values")
+                assertThat(actualAsList).hasSize(3)
+            }
+
+            @Test
+            fun `supports dictionaries`() {
+                val actualAsMap: List<Map<*, *>>? = config
+                    .subConfig("style")
+                    .subConfig("AsListOfMaps")
+                    .valueOrNull("values")
+                assertThat(actualAsMap)
+                    .hasSize(3)
+            }
+
+            @Test
+            fun `supports empty dictionaries`() {
+                val actualAsMap: List<Map<*, *>>? = config
+                    .subConfig("style")
+                    .subConfig("EmptyListOfMaps")
+                    .valueOrNull("values")
+                assertThat(actualAsMap)
+                    .isNotNull
+                    .isEmpty()
+            }
+        }
+
+        @Test
+        fun `throws an exception on an non-existing file`() {
+            val path = Path("doesNotExist.yml")
             assertThatIllegalArgumentException()
                 .isThrownBy { YamlConfig.load(path) }
                 .withMessageStartingWith("Configuration does not exist")
         }
 
-        it("throws an exception on a directory") {
+        @Test
+        fun `throws an exception on a directory`() {
             val path = resourceAsPath("/config_validation")
             assertThatIllegalArgumentException()
                 .isThrownBy { YamlConfig.load(path) }
                 .withMessageStartingWith("Configuration must be a file")
         }
 
-        it("throws InvalidConfigurationError on invalid structured yaml files") {
+        @Test
+        fun `throws InvalidConfigurationError on invalid structured yaml files`() {
             assertThatCode {
                 yamlConfigFromContent(
                     """
-                    map:
-                          {}map
+                        map:
+                              {}map
                     """.trimIndent()
                 )
             }.isInstanceOf(Config.InvalidConfigurationError::class.java)
@@ -135,4 +253,4 @@ class YamlConfigSpec : Spek({
                 .hasCauseInstanceOf(ParserException::class.java)
         }
     }
-})
+}

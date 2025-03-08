@@ -1,29 +1,27 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.psi.KtSafeQualifiedExpression
 import org.jetbrains.kotlin.psi.ValueArgument
-import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
-import org.jetbrains.kotlin.resolve.calls.callUtil.getType
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getType
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
+import org.jetbrains.kotlin.types.error.ErrorType
 import org.jetbrains.kotlin.types.isNullable
 
 /*
  * Rule adapted from Kotlin's IntelliJ plugin:
  * https://github.com/JetBrains/kotlin/blob/f5d0a38629e7d2e7017ee645dc4d4bee60614e93/idea/src/org/jetbrains/kotlin/idea/inspections/collections/UselessCallOnNotNullInspection.kt
  */
+
 /**
  * The Kotlin stdlib provides some functions that are designed to operate on references that may be null. These
  * functions can also be called on non-nullable references or on collections or sequences that are known to be empty -
@@ -44,22 +42,19 @@ import org.jetbrains.kotlin.types.isNullable
  * val testString = ""?.isBlank()
  * </compliant>
  */
-@RequiresTypeResolution
 @ActiveByDefault(since = "1.2.0")
-class UselessCallOnNotNull(config: Config = Config.empty) : Rule(config) {
-    override val issue: Issue = Issue(
-        "UselessCallOnNotNull",
-        Severity.Performance,
-        "This call on non-null reference may be reduced or removed. Some calls are intended to be called on nullable " +
-            "collection or text types (e.g. String?). When this call is used on a reference to a non-null type " +
-            "(e.g. String) it is redundant and will have no effect, so it can be removed.",
-        Debt.FIVE_MINS
-    )
+class UselessCallOnNotNull(config: Config) :
+    Rule(
+        config,
+        "This call on a non-null reference may be reduced or removed. " +
+            "Some calls are intended to be called on nullable collection or text types (e.g. `String?`)." +
+            "When this call is used on a reference to a non-null type " +
+            "(e.g. `String`) it is redundant and will have no effect, so it can be removed."
+    ),
+    RequiresFullAnalysis {
 
-    @Suppress("ReturnCount")
     override fun visitQualifiedExpression(expression: KtQualifiedExpression) {
         super.visitQualifiedExpression(expression)
-        if (bindingContext == BindingContext.EMPTY) return
 
         val safeExpression = expression as? KtSafeQualifiedExpression
         val notNullType = expression.receiverExpression.getType(bindingContext)?.isNullable() == false
@@ -80,7 +75,7 @@ class UselessCallOnNotNull(config: Config = Config.empty) : Rule(config) {
             } else {
                 "Replace $shortName with ${conversion.replacementName}"
             }
-            report(CodeSmell(issue, Entity.from(expression), message))
+            report(Finding(Entity.from(expression), message))
         }
     }
 
@@ -91,14 +86,30 @@ class UselessCallOnNotNull(config: Config = Config.empty) : Rule(config) {
         val fqName = resolvedCall.resultingDescriptor.fqNameOrNull()
         if (fqName == listOfNotNull) {
             val varargs = resolvedCall.valueArguments.entries.single().value.arguments
-            if (varargs.none { it.isNullable() }) {
-                report(CodeSmell(issue, Entity.from(expression), "Replace listOfNotNull with listOf"))
+            if (varargs.all { it.isNullable() == false }) {
+                report(Finding(Entity.from(expression), "Replace listOfNotNull with listOf"))
             }
         }
     }
 
-    private fun ValueArgument.isNullable(): Boolean =
-        getArgumentExpression()?.getType(bindingContext)?.isNullable() == true
+    /**
+     * Determines whether this [ValueArgument] is nullable, returning null if its type cannot be
+     * determined.
+     */
+    private fun ValueArgument.isNullable(): Boolean? {
+        val wrapperType = getArgumentExpression()?.getType(bindingContext) ?: return null
+        val type = if (getSpreadElement() != null) {
+            // in case of a spread operator (`*list`),
+            // we actually want to get the generic parameter from the collection
+            wrapperType.arguments.first().type
+        } else {
+            wrapperType
+        }
+
+        return type
+            .takeUnless { it is ErrorType }
+            ?.isNullable()
+    }
 
     private data class Conversion(val replacementName: String? = null)
 

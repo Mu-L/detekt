@@ -1,16 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtCallExpression
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
 
 /**
@@ -33,17 +30,13 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
  * </compliant>
  *
  */
-@RequiresTypeResolution
-class UseEmptyCounterpart(config: Config) : Rule(config) {
+class UseEmptyCounterpart(config: Config) :
+    Rule(
+        config,
+        """Instantiation of an object's "empty" state should use the object's "empty" initializer."""
+    ),
+    RequiresFullAnalysis {
 
-    override val issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        """Instantiation of an object's "empty" state should use the object's "empty" initializer""",
-        Debt.FIVE_MINS
-    )
-
-    @Suppress("ReturnCount")
     override fun visitCallExpression(expression: KtCallExpression) {
         super.visitCallExpression(expression)
 
@@ -53,7 +46,7 @@ class UseEmptyCounterpart(config: Config) : Rule(config) {
 
         if (expression.valueArguments.isEmpty()) {
             val message = "${fqName.shortName()} can be replaced with $emptyCounterpart"
-            report(CodeSmell(issue, Entity.from(expression), message))
+            report(Finding(Entity.from(expression), message))
         }
     }
 }

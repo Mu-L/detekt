@@ -1,17 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.diagnostics.Errors
 import org.jetbrains.kotlin.psi.KtExpression
-import org.jetbrains.kotlin.resolve.BindingContext
 
 /**
  * Reports unreachable code.
@@ -33,25 +29,21 @@ import org.jetbrains.kotlin.resolve.BindingContext
  * }
  * </noncompliant>
  */
-@RequiresTypeResolution
 @ActiveByDefault(since = "1.0.0")
-class UnreachableCode(config: Config = Config.empty) : Rule(config) {
-
-    override val issue = Issue(
-        "UnreachableCode",
-        Severity.Warning,
-        "Unreachable code detected. This code should be removed",
-        Debt.TEN_MINS
-    )
+class UnreachableCode(config: Config) :
+    Rule(
+        config,
+        "Unreachable code detected. This code should be removed."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitExpression(expression: KtExpression) {
         super.visitExpression(expression)
-        if (bindingContext != BindingContext.EMPTY &&
-            bindingContext.diagnostics.forElement(expression).any { it.factory == Errors.UNREACHABLE_CODE }
+        if (bindingContext.diagnostics.forElement(expression)
+                .any { it.factory == Errors.UNREACHABLE_CODE || it.factory == Errors.USELESS_ELVIS }
         ) {
             report(
-                CodeSmell(
-                    issue,
+                Finding(
                     Entity.from(expression),
                     "This expression is unreachable code which should either be used or removed."
                 )

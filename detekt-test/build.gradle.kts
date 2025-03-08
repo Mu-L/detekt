@@ -1,12 +1,13 @@
 plugins {
     id("module")
-    alias(libs.plugins.binaryCompatibilityValidator)
+    id("public-api")
 }
 
 dependencies {
     api(projects.detektApi)
     api(projects.detektTestUtils)
-    compileOnly(libs.assertj)
+    implementation(projects.detektUtils)
+    implementation(libs.kotlin.reflect)
+    compileOnly(libs.assertj.core)
     implementation(projects.detektCore)
-    implementation(projects.detektParser)
 }

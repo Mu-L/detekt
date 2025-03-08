@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import org.jetbrains.kotlin.psi.KtClassOrObject
 
 /**
@@ -20,14 +17,10 @@ import org.jetbrains.kotlin.psi.KtClassOrObject
  * </noncompliant>
  */
 @ActiveByDefault(since = "1.2.0")
-class UnnecessaryInheritance(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        javaClass.simpleName,
-        Severity.Style,
-        "The extended super type is unnecessary.",
-        Debt.FIVE_MINS
-    )
+class UnnecessaryInheritance(config: Config) : Rule(
+    config,
+    "The extended super type is unnecessary."
+) {
 
     override fun visitClassOrObject(classOrObject: KtClassOrObject) {
         for (superEntry in classOrObject.superTypeListEntries) {
@@ -39,6 +32,6 @@ class UnnecessaryInheritance(config: Config = Config.empty) : Rule(config) {
     }
 
     private fun report(classOrObject: KtClassOrObject, message: String) {
-        report(CodeSmell(issue, Entity.atName(classOrObject), message))
+        report(Finding(Entity.atName(classOrObject), message))
     }
 }

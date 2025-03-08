@@ -6,14 +6,12 @@ plugins {
 
 dependencies {
     api(libs.kotlin.compilerEmbeddable)
-    implementation(projects.detektPsiUtils)
     testImplementation(projects.detektTestUtils)
-    testImplementation(libs.bundles.testImplementation)
-    testRuntimeOnly(libs.spek.runner)
+    testImplementation(libs.assertj.core)
 }
 
-tasks.withType<Test> {
-    systemProperty("kotlinVersion", getKotlinPluginVersion() ?: embeddedKotlinVersion)
+tasks.withType<Test>().configureEach {
+    systemProperty("kotlinVersion", getKotlinPluginVersion())
 
     doFirst {
         systemProperty("testClasspath", classpath.joinToString(";"))

@@ -1,17 +1,15 @@
 package io.gitlab.arturbosch.detekt.rules.style
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
+import io.gitlab.arturbosch.detekt.api.Alias
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.DetektVisitor
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.rules.safeAs
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
+import org.jetbrains.kotlin.psi.KtBinaryExpressionWithTypeRHS
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableReferenceExpression
 import org.jetbrains.kotlin.psi.KtClass
@@ -21,6 +19,7 @@ import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtFunctionType
 import org.jetbrains.kotlin.psi.KtImportDirective
+import org.jetbrains.kotlin.psi.KtIsExpression
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtNamedFunction
@@ -39,16 +38,11 @@ import org.jetbrains.kotlin.utils.addIfNotNull
  * can lead to confusion and potential bugs.
  */
 @ActiveByDefault(since = "1.2.0")
-class UnusedPrivateClass(config: Config = Config.empty) : Rule(config) {
-
-    override val defaultRuleIdAliases: Set<String> = setOf("unused")
-
-    override val issue: Issue = Issue(
-        "UnusedPrivateClass",
-        Severity.Maintainability,
-        "Private class is unused.",
-        Debt.FIVE_MINS
-    )
+@Alias("unused")
+class UnusedPrivateClass(config: Config) : Rule(
+    config,
+    "Private class is unused and should be removed."
+) {
 
     override fun visit(root: KtFile) {
         super.visit(root)
@@ -57,27 +51,31 @@ class UnusedPrivateClass(config: Config = Config.empty) : Rule(config) {
         root.accept(classVisitor)
 
         classVisitor.getUnusedClasses().forEach {
-            report(CodeSmell(issue, Entity.from(it), "Private class ${it.nameAsSafeName.identifier} is unused."))
+            report(
+                Finding(
+                    Entity.from(it),
+                    "Private class ${it.nameAsSafeName.identifier} is unused."
+                )
+            )
         }
     }
 
-    @Suppress("Detekt.TooManyFunctions")
+    @Suppress("TooManyFunctions")
     private class UnusedClassVisitor : DetektVisitor() {
 
         private val privateClasses = mutableSetOf<KtNamedDeclaration>()
         private val namedClasses = mutableSetOf<String>()
         private val importedFqNames = mutableSetOf<FqName>()
 
-        fun getUnusedClasses(): List<KtNamedDeclaration> {
-            return privateClasses.filter { !it.isUsed() }
-        }
+        fun getUnusedClasses(): List<KtNamedDeclaration> = privateClasses.filter { !it.isUsed() }
 
         private fun KtNamedDeclaration.isUsed(): Boolean {
             if (nameAsSafeName.identifier in namedClasses) return true
             val pathSegments = fqName?.pathSegments().orEmpty()
-            return pathSegments.isNotEmpty() && importedFqNames.any { importedFqName ->
-                importedFqName.pathSegments().zip(pathSegments).all { it.first == it.second }
-            }
+            return pathSegments.isNotEmpty() &&
+                importedFqNames.any { importedFqName ->
+                    importedFqName.pathSegments().zip(pathSegments).all { it.first == it.second }
+                }
         }
 
         override fun visitClass(klass: KtClass) {
@@ -150,6 +148,16 @@ class UnusedPrivateClass(config: Config = Config.empty) : Rule(config) {
             super.visitProperty(property)
         }
 
+        override fun visitBinaryWithTypeRHSExpression(expression: KtBinaryExpressionWithTypeRHS) {
+            expression.right?.run { registerAccess(this) }
+            super.visitBinaryWithTypeRHSExpression(expression)
+        }
+
+        override fun visitIsExpression(expression: KtIsExpression) {
+            expression.typeReference?.run { registerAccess(this) }
+            super.visitIsExpression(expression)
+        }
+
         override fun visitCallExpression(expression: KtCallExpression) {
             expression.calleeExpression?.text?.run { namedClasses.add(this) }
             expression.typeArguments
@@ -160,12 +168,10 @@ class UnusedPrivateClass(config: Config = Config.empty) : Rule(config) {
 
         override fun visitDoubleColonExpression(expression: KtDoubleColonExpression) {
             checkReceiverForClassUsage(expression.receiverExpression)
-            if (expression.isEmptyLHS) {
-                expression.safeAs<KtCallableReferenceExpression>()
-                    ?.callableReference
-                    ?.takeIf { looksLikeAClassName(it.getReferencedName()) }
-                    ?.let { namedClasses.add(it.getReferencedName()) }
-            }
+            (expression as? KtCallableReferenceExpression)
+                ?.callableReference
+                ?.takeIf { looksLikeAClassName(it.getReferencedName()) }
+                ?.let { namedClasses.add(it.getReferencedName()) }
             super.visitDoubleColonExpression(expression)
         }
 

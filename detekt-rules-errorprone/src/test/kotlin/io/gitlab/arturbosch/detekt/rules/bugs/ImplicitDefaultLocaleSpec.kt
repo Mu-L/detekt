@@ -1,92 +1,80 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.rules.setupKotlinEnvironment
-import io.gitlab.arturbosch.detekt.test.compileAndLintWithContext
+import io.gitlab.arturbosch.detekt.rules.KotlinCoreEnvironmentTest
+import io.gitlab.arturbosch.detekt.test.lintWithContext
 import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
+import org.junit.jupiter.api.Test
 
-class ImplicitDefaultLocaleSpec : Spek({
-    setupKotlinEnvironment()
+@KotlinCoreEnvironmentTest
+class ImplicitDefaultLocaleSpec(private val env: KotlinCoreEnvironment) {
+    private val subject = ImplicitDefaultLocale(Config.empty)
 
-    val env: KotlinCoreEnvironment by memoized()
-    val subject by memoized { ImplicitDefaultLocale(Config.empty) }
-
-    describe("ImplicitDefault rule") {
-
-        it("reports String.format call with template but without explicit locale") {
-            val code = """
-                fun x() {
-                    String.format("%d", 1)
-                }"""
-            assertThat(subject.compileAndLintWithContext(env, code)).hasSize(1)
-        }
-
-        it("does not report String.format call with explicit locale") {
-            val code = """
-                import java.util.Locale
-                fun x() {
-                    String.format(Locale.US, "%d", 1)
-                }"""
-            assertThat(subject.compileAndLintWithContext(env, code)).isEmpty()
-        }
-
-        it("reports String.toUpperCase() call without explicit locale") {
-            val code = """
-                fun x() {
-                    val s = "deadbeef"
-                    s.toUpperCase()
-                }"""
-            assertThat(subject.compileAndLintWithContext(env, code)).hasSize(1)
-        }
-
-        it("does not report String.toUpperCase() call with explicit locale") {
-            val code = """
-                import java.util.Locale
-                fun x() {
-                    val s = "deadbeef"
-                    s.toUpperCase(Locale.US)
-                }"""
-            assertThat(subject.compileAndLintWithContext(env, code)).isEmpty()
-        }
-
-        it("reports String.toLowerCase() call without explicit locale") {
-            val code = """
-                fun x() {
-                    val s = "deadbeef"
-                    s.toLowerCase()
-                }"""
-            assertThat(subject.compileAndLintWithContext(env, code)).hasSize(1)
-        }
-
-        it("does not report String.toLowerCase() call with explicit locale") {
-            val code = """
-                import java.util.Locale
-                fun x() {
-                    val s = "deadbeef"
-                    s.toLowerCase(Locale.US)
-                }"""
-            assertThat(subject.compileAndLintWithContext(env, code)).isEmpty()
-        }
-
-        it("reports String?.toUpperCase() call without explicit locale") {
-            val code = """
-                fun x() {
-                    val s: String? = "deadbeef"
-                    s?.toUpperCase()
-                }"""
-            assertThat(subject.compileAndLintWithContext(env, code)).hasSize(1)
-        }
-
-        it("reports String?.toLowerCase() call without explicit locale") {
-            val code = """
-                fun x() {
-                    val s: String? = "deadbeef"
-                    s?.toLowerCase()
-                }"""
-            assertThat(subject.compileAndLintWithContext(env, code)).hasSize(1)
-        }
+    @Test
+    fun `reports String_format call with template but without explicit locale`() {
+        val code = """
+            fun x() {
+                String.format("%d", 1)
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).hasSize(1)
     }
-})
+
+    @Test
+    fun `does not report String_format call with explicit locale`() {
+        val code = """
+            import java.util.Locale
+            fun x() {
+                String.format(Locale.US, "%d", 1)
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `does not report custom String_format call`() {
+        val code = """
+            fun String.Companion.format(format: String, value: Int) = format + value.toString()
+
+            fun x() {
+                String.format("%d", 1)
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `reports format extension call with template but without explicit locale`() {
+        val code = """
+            fun x() {
+                "%d".format(1)
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).hasSize(1)
+    }
+
+    @Test
+    fun `does not report format extension call with explicit locale`() {
+        val code = """
+            import java.util.Locale
+            fun x() {
+                "%d".format(Locale.US, 1)
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+
+    @Test
+    fun `does not report for custom format extension call`() {
+        val code = """
+            fun String.format(value: Int): String {
+                return value.toString()
+            }
+            fun x() {
+                "%d".format(1)
+            }
+        """.trimIndent()
+        assertThat(subject.lintWithContext(env, code)).isEmpty()
+    }
+}

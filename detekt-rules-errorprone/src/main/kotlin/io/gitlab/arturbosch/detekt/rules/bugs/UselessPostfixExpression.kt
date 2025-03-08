@@ -1,12 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.lexer.KtTokens.MINUSMINUS
 import org.jetbrains.kotlin.lexer.KtTokens.PLUSPLUS
 import org.jetbrains.kotlin.psi.KtBinaryExpression
@@ -22,7 +20,7 @@ import org.jetbrains.kotlin.psi.psiUtil.getNonStrictParentOfType
 import org.jetbrains.kotlin.psi.psiUtil.isPropertyParameter
 
 /**
- * This rule reports postfix expressions (++, --) which are unused and thus unnecessary.
+ * Reports postfix expressions (++, --) which are unused and thus unnecessary.
  * This leads to confusion as a reader of the code might think the value will be incremented/decremented.
  * However, the value is replaced with the original value which might lead to bugs.
  *
@@ -53,14 +51,11 @@ import org.jetbrains.kotlin.psi.psiUtil.isPropertyParameter
  * }
  * </compliant>
  */
-class UselessPostfixExpression(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        "UselessPostfixExpression",
-        Severity.Defect,
-        "The incremented or decremented value is unused. This value is replaced with the original value.",
-        Debt.TWENTY_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class UselessPostfixExpression(config: Config) : Rule(
+    config,
+    "The incremented or decremented value is unused. This value is replaced with the original value."
+) {
 
     var properties = emptySet<String?>()
 
@@ -78,24 +73,31 @@ class UselessPostfixExpression(config: Config = Config.empty) : Rule(config) {
             report(postfixExpression)
         }
 
-        getPostfixExpressionChildren(expression.returnedExpression)
-            ?.forEach { report(it) }
+        expression.returnedExpression
+            ?.let(this::getPostfixExpressionChildren)
+            ?.filter { it.shouldBeReported() }
+            ?.forEach(this::report)
     }
 
     override fun visitBinaryExpression(expression: KtBinaryExpression) {
         val postfixExpression = expression.right?.asPostFixExpression()
         val leftIdentifierText = expression.left?.text
-        checkPostfixExpression(postfixExpression, leftIdentifierText)
-        getPostfixExpressionChildren(expression.right)
+        postfixExpression?.let { checkPostfixExpression(it, leftIdentifierText) }
+        expression.right
+            ?.let(this::getPostfixExpressionChildren)
             ?.forEach { checkPostfixExpression(it, leftIdentifierText) }
     }
 
     private fun KtExpression.asPostFixExpression() = if (this is KtPostfixExpression &&
         (operationToken === PLUSPLUS || operationToken === MINUSMINUS)
-    ) this else null
+    ) {
+        this
+    } else {
+        null
+    }
 
-    private fun checkPostfixExpression(postfixExpression: KtPostfixExpression?, leftIdentifierText: String?) {
-        if (postfixExpression != null && leftIdentifierText == postfixExpression.firstChild?.text) {
+    private fun checkPostfixExpression(postfixExpression: KtPostfixExpression, leftIdentifierText: String?) {
+        if (leftIdentifierText == postfixExpression.firstChild?.text) {
             report(postfixExpression)
         }
     }
@@ -109,8 +111,7 @@ class UselessPostfixExpression(config: Config = Config.empty) : Rule(config) {
 
     private fun report(postfixExpression: KtPostfixExpression) {
         report(
-            CodeSmell(
-                issue,
+            Finding(
                 Entity.from(postfixExpression),
                 "The result of the postfix expression: " +
                     "${postfixExpression.text} will not be used and is therefore useless."
@@ -118,7 +119,7 @@ class UselessPostfixExpression(config: Config = Config.empty) : Rule(config) {
         )
     }
 
-    private fun getPostfixExpressionChildren(expression: KtExpression?) =
-        expression?.getChildrenOfType<KtPostfixExpression>()
-            ?.filter { it.operationToken === PLUSPLUS || it.operationToken === MINUSMINUS }
+    private fun getPostfixExpressionChildren(expression: KtExpression) =
+        expression.getChildrenOfType<KtPostfixExpression>()
+            .filter { it.operationToken === PLUSPLUS || it.operationToken === MINUSMINUS }
 }

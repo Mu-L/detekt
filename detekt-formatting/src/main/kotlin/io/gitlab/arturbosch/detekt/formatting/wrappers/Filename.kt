@@ -1,16 +1,21 @@
 package io.gitlab.arturbosch.detekt.formatting.wrappers
 
-import com.pinterest.ktlint.ruleset.standard.FilenameRule
+import com.pinterest.ktlint.ruleset.standard.rules.FilenameRule
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import io.gitlab.arturbosch.detekt.formatting.FormattingRule
 
 /**
- * See <a href="https://ktlint.github.io">ktlint-website</a> for documentation.
+ * See [ktlint docs](https://pinterest.github.io/ktlint/<ktlintVersion/>/rules/standard/#file-name) for documentation.
+ *
+ * This rules overlaps with [naming>MatchingDeclarationName](https://detekt.dev/naming.html#matchingdeclarationname)
+ * from the standard rules, make sure to enable just one.
  */
 @ActiveByDefault(since = "1.0.0")
-class Filename(config: Config) : FormattingRule(config) {
+class Filename(config: Config) : FormattingRule(
+    config,
+    "Checks if top level class matches the filename"
+) {
 
     override val wrapping = FilenameRule()
-    override val issue = issueFor("Checks if top level class matches the filename")
 }

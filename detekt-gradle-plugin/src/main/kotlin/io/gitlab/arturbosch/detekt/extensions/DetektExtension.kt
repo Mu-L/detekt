@@ -1,103 +1,93 @@
 package io.gitlab.arturbosch.detekt.extensions
 
-import org.gradle.api.Action
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.model.ObjectFactory
-import org.gradle.api.plugins.quality.CodeQualityExtension
-import java.io.File
-import javax.inject.Inject
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.Property
+import java.io.InputStream
+import java.net.URL
+import java.util.Properties
 
-open class DetektExtension @Inject constructor(objects: ObjectFactory) : CodeQualityExtension() {
+@Suppress("ComplexInterface")
+interface DetektExtension {
 
-    var ignoreFailures: Boolean
-        @JvmName("ignoreFailures_")
-        get() = isIgnoreFailures
+    val toolVersion: Property<String>
 
-        @JvmName("ignoreFailures_")
-        set(value) {
-            isIgnoreFailures = value
-        }
+    val ignoreFailures: Property<Boolean>
 
-    @Deprecated("Use reportsDir which is equivalent", ReplaceWith("reportsDir"))
-    val customReportsDir: File?
-        get() = reportsDir
+    val failOnSeverity: Property<FailOnSeverity>
 
-    @Deprecated("Customise the reports on the Detekt task(s) instead.", level = DeprecationLevel.WARNING)
-    val reports: DetektReports = objects.newInstance(DetektReports::class.java)
+    val reportsDir: DirectoryProperty
 
-    @Deprecated(message = "Please use the source property instead.", replaceWith = ReplaceWith("source"))
-    var input: ConfigurableFileCollection
-        get() = source
-        set(value) {
-            source = value
-        }
+    val source: ConfigurableFileCollection
 
-    var source: ConfigurableFileCollection = objects.fileCollection()
-        .from(
-            DEFAULT_SRC_DIR_JAVA,
-            DEFAULT_TEST_SRC_DIR_JAVA,
-            DEFAULT_SRC_DIR_KOTLIN,
-            DEFAULT_TEST_SRC_DIR_KOTLIN,
-        )
+    val baseline: RegularFileProperty
 
-    var baseline: File? = objects.fileProperty()
-        .fileValue(File("detekt-baseline.xml"))
-        .get().asFile
+    val basePath: DirectoryProperty
 
-    var basePath: String? = null
+    val enableCompilerPlugin: Property<Boolean>
 
-    var config: ConfigurableFileCollection = objects.fileCollection()
+    val config: ConfigurableFileCollection
 
-    var debug: Boolean = DEFAULT_DEBUG_VALUE
+    val debug: Property<Boolean>
 
-    var parallel: Boolean = DEFAULT_PARALLEL_VALUE
+    val parallel: Property<Boolean>
 
-    @Deprecated("Please use the buildUponDefaultConfig and allRules flags instead.", ReplaceWith("allRules"))
-    var failFast: Boolean = DEFAULT_FAIL_FAST_VALUE
+    val allRules: Property<Boolean>
 
-    var allRules: Boolean = DEFAULT_ALL_RULES_VALUE
+    val buildUponDefaultConfig: Property<Boolean>
 
-    var buildUponDefaultConfig: Boolean = DEFAULT_BUILD_UPON_DEFAULT_CONFIG_VALUE
+    val disableDefaultRuleSets: Property<Boolean>
 
-    var disableDefaultRuleSets: Boolean = DEFAULT_DISABLE_RULESETS_VALUE
-
-    var autoCorrect: Boolean = DEFAULT_AUTO_CORRECT_VALUE
+    val autoCorrect: Property<Boolean>
 
     /**
      * List of Android build variants for which no detekt task should be created.
      *
      * This is a combination of build types and flavors, such as fooDebug or barRelease.
      */
-    var ignoredVariants: List<String> = emptyList()
+    val ignoredVariants: ListProperty<String>
 
     /**
      * List of Android build types for which no detekt task should be created.
      */
-    var ignoredBuildTypes: List<String> = emptyList()
+    val ignoredBuildTypes: ListProperty<String>
 
     /**
      * List of Android build flavors for which no detekt task should be created
      */
-    var ignoredFlavors: List<String> = emptyList()
-
-    @Suppress("DeprecatedCallableAddReplaceWith", "DEPRECATION")
-    @Deprecated("Customise the reports on the Detekt task(s) instead.", level = DeprecationLevel.WARNING)
-    fun reports(configure: Action<DetektReports>) {
-        configure.execute(reports)
-    }
-
-    companion object {
-        const val DEFAULT_SRC_DIR_JAVA = "src/main/java"
-        const val DEFAULT_TEST_SRC_DIR_JAVA = "src/test/java"
-        const val DEFAULT_SRC_DIR_KOTLIN = "src/main/kotlin"
-        const val DEFAULT_TEST_SRC_DIR_KOTLIN = "src/test/kotlin"
-        const val DEFAULT_DEBUG_VALUE = false
-        const val DEFAULT_PARALLEL_VALUE = false
-        const val DEFAULT_AUTO_CORRECT_VALUE = false
-        const val DEFAULT_DISABLE_RULESETS_VALUE = false
-        const val DEFAULT_REPORT_ENABLED_VALUE = true
-        const val DEFAULT_FAIL_FAST_VALUE = false
-        const val DEFAULT_ALL_RULES_VALUE = false
-        const val DEFAULT_BUILD_UPON_DEFAULT_CONFIG_VALUE = false
-    }
+    val ignoredFlavors: ListProperty<String>
 }
+
+internal fun loadDetektVersion(classLoader: ClassLoader): String {
+    // Other Gradle plugins can also have a versions.properties.
+    val distinctVersions = classLoader
+        .getResources("detekt-versions.properties")
+        .toList()
+        .mapNotNull { versions ->
+            Properties().run {
+                versions.openSafeStream().use(::load)
+                getProperty("detektVersion")
+            }
+        }
+        .distinct()
+    return distinctVersions.singleOrNull() ?: error(
+        "You're importing two detekt plugins which have different versions. " +
+            "(${distinctVersions.joinToString()}) Make sure to align the versions."
+    )
+}
+
+// Copy-paste from io.github.detekt.utils.openSafeStream in Resources.kt.
+// Can't use that function, because gradle-plugin is minimising dependencies: see #4748.
+private fun URL.openSafeStream(): InputStream =
+    openConnection()
+        /*
+         * Due to https://bugs.openjdk.java.net/browse/JDK-6947916 and https://bugs.openjdk.java.net/browse/JDK-8155607,
+         * it is necessary to disallow caches to maintain stability on JDK 8 and 11 (and possibly more).
+         * Otherwise, simultaneous invocations of detekt in the same VM can fail spuriously. A similar bug is referenced in
+         * https://github.com/detekt/detekt/issues/3396. The performance regression is likely unnoticeable.
+         * Due to https://github.com/detekt/detekt/issues/4332 it is included for all JDKs.
+         */
+        .apply { useCaches = false }
+        .getInputStream()

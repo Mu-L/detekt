@@ -1,13 +1,10 @@
 package io.gitlab.arturbosch.detekt.rules.performance
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtExpression
 
@@ -25,14 +22,10 @@ import org.jetbrains.kotlin.psi.KtExpression
  * </compliant>
  */
 @ActiveByDefault(since = "1.0.0")
-class UnnecessaryTemporaryInstantiation(config: Config = Config.empty) : Rule(config) {
-
-    override val issue: Issue = Issue(
-        "UnnecessaryTemporaryInstantiation",
-        Severity.Performance,
-        "Avoid temporary objects when converting primitive types to String.",
-        Debt.FIVE_MINS
-    )
+class UnnecessaryTemporaryInstantiation(config: Config) : Rule(
+    config,
+    "Avoid temporary objects when converting primitive types to `String`."
+) {
 
     private val types: Set<String> = hashSetOf("Boolean", "Byte", "Short", "Integer", "Long", "Float", "Double")
 
@@ -40,7 +33,7 @@ class UnnecessaryTemporaryInstantiation(config: Config = Config.empty) : Rule(co
         if (isPrimitiveWrapperType(expression.calleeExpression) &&
             expression.nextSibling?.nextSibling?.text == "toString()"
         ) {
-            report(CodeSmell(issue, Entity.from(expression), issue.description))
+            report(Finding(Entity.from(expression), description))
         }
     }
 

@@ -1,24 +1,22 @@
-import org.jetbrains.dokka.gradle.DokkaTask
-
 plugins {
     id("module")
-    alias(libs.plugins.dokka)
-    `java-test-fixtures`
-    alias(libs.plugins.binaryCompatibilityValidator)
+    id("public-api")
+    id("java-test-fixtures")
+    id("dev.drewhamilton.poko") version "0.18.2"
 }
 
 dependencies {
     api(libs.kotlin.compilerEmbeddable)
-    api(projects.detektPsiUtils)
+    implementation(projects.detektUtils)
 
     testImplementation(projects.detektTest)
-    testImplementation(libs.bundles.testImplementation)
+    testImplementation(libs.assertj.core)
+    testFixturesImplementation(projects.detektTestUtils)
+    testFixturesImplementation(libs.poko.annotations)
+}
 
-    testRuntimeOnly(libs.spek.runner)
-
-    testFixturesApi(libs.kotlin.stdlibJdk8)
-
-    dokkaJekyllPlugin(libs.dokka.jekyll)
+detekt {
+    config.from("config/detekt.yml")
 }
 
 val javaComponent = components["java"] as AdhocComponentWithVariants
@@ -28,10 +26,6 @@ listOf(configurations.testFixturesApiElements, configurations.testFixturesRuntim
             skip()
         }
     }
-}
-
-tasks.withType<DokkaTask>().configureEach {
-    outputDirectory.set(rootDir.resolve("docs/pages/kdoc"))
 }
 
 apiValidation {

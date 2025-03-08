@@ -1,16 +1,19 @@
 package io.gitlab.arturbosch.detekt.formatting.wrappers
 
-import com.pinterest.ktlint.ruleset.experimental.PackageNameRule
+import com.pinterest.ktlint.ruleset.standard.rules.PackageNameRule
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.internal.AutoCorrectable
 import io.gitlab.arturbosch.detekt.formatting.FormattingRule
 
 /**
- * See <a href="https://ktlint.github.io">ktlint-website</a> for documentation.
+ * See [ktlint docs](https://pinterest.github.io/ktlint/<ktlintVersion/>/rules/standard/#package-name) for
+ * documentation.
  */
-@AutoCorrectable(since = "1.0.0")
-class PackageName(config: Config) : FormattingRule(config) {
+@ActiveByDefault(since = "1.22.0")
+class PackageName(config: Config) : FormattingRule(
+    config,
+    "Checks package name is formatted correctly"
+) {
 
     override val wrapping = PackageNameRule()
-    override val issue = issueFor("Checks package name is formatted correctly")
 }

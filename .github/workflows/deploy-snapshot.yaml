@@ -5,38 +5,42 @@ on:
     branches:
       - main
 
+env:
+  DEVELOCITY_ACCESS_KEY: ${{ secrets.GRADLE_ENTERPRISE_ACCESS_KEY }}
+  ORG_GRADLE_PROJECT_enablePTS: false
+
+permissions:
+  contents: read
+
 jobs:
   gradle:
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, 'ci skip') }}
-    env:
-      GRADLE_OPTS: -Dorg.gradle.daemon=false
+    if: github.repository == 'detekt/detekt'
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@v2
+      - name: Checkout Repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
-    - name: Cache Gradle Folders
-      uses: actions/cache@v2
-      with:
-        path: |
-          ~/.gradle/caches/
-          ~/.gradle/wrapper/
-        key: cache-gradle-${{ hashFiles('gradle/libs.versions.toml') }}
-        restore-keys: |
-          cache-gradle-
+      - name: Setup Java
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4
+        with:
+          java-version: 21
+          distribution: "temurin"
 
-    - name: Setup Java
-      uses: actions/setup-java@v2
-      with:
-        java-version: 8
-        distribution: 'temurin'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@94baf225fe0a508e581a564467443d0e2379123b # v4
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
-    - name: Build detekt
-      run: ./gradlew build
+      - name: Assemble and publish artifacts to Maven Local
+        run: ./gradlew publishToMavenLocal
 
-    - name: Deploy Snapshot
-      env:
-        MAVEN_CENTRAL_USER: ${{ secrets.MAVEN_CENTRAL_USER }}
-        MAVEN_CENTRAL_PW: ${{ secrets.MAVEN_CENTRAL_PW }}
-      run: ./gradlew publishAllPublicationsToSonatypeSnapshotRepository -Dsnapshot=true --stacktrace
-      if: ${{ github.repository == 'detekt/detekt'}}
+      - name: Build detekt
+        run: ./gradlew build
+
+      - name: Deploy Snapshot
+        env:
+          ORG_GRADLE_PROJECT_SIGNING_KEY: ${{ secrets.ORG_GRADLE_PROJECT_SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_SIGNING_PWD: ${{ secrets.ORG_GRADLE_PROJECT_SIGNING_PWD }}
+          ORG_GRADLE_PROJECT_SONATYPE_USERNAME: ${{ secrets.ORG_GRADLE_PROJECT_SONATYPE_USERNAME }}
+          ORG_GRADLE_PROJECT_SONATYPE_PASSWORD: ${{ secrets.ORG_GRADLE_PROJECT_SONATYPE_PASSWORD }}
+        run: ./gradlew publishAllToSonatypeSnapshot -Dsnapshot=true --stacktrace

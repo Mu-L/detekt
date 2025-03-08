@@ -2,6 +2,7 @@ package io.gitlab.arturbosch.detekt.core.config
 
 import io.gitlab.arturbosch.detekt.api.Config
 import io.gitlab.arturbosch.detekt.api.Config.Companion.CONFIG_SEPARATOR
+import kotlin.reflect.KClass
 
 private val ALLOWED_BOOL_VALUES = setOf("true", "false")
 
@@ -12,14 +13,26 @@ fun Config.valueOrDefaultInternal(
     key: String,
     result: Any?,
     default: Any,
-    parser: (result: String, default: Any) -> Any = ::tryParseBasedOnDefault
-): Any {
-    return try {
+    parser: (result: String, default: Any) -> Any = ::tryParseBasedOnDefault,
+): Any =
+    try {
         if (result != null) {
             when {
                 result is String -> parser(result, default)
-                default::class in Config.PRIMITIVES &&
+                result is List<*> -> {
+                    if (default !is List<*>) {
+                        throw ClassCastException()
+                    }
+                    check(result.all { it is String }) {
+                        "Only lists of strings are supported. Value \"$result\" set " +
+                            "for config parameter \"${keySequence(key)}\" contains non-string values."
+                    }
+                    result.map { it as String }
+                }
+
+                default::class in PRIMITIVES &&
                     result::class != default::class -> throw ClassCastException()
+
                 else -> result
             }
         } else {
@@ -28,14 +41,19 @@ fun Config.valueOrDefaultInternal(
     } catch (_: ClassCastException) {
         error(
             "Value \"$result\" set for config parameter \"${keySequence(key)}\" is not of" +
-                " required type ${default::class.simpleName}."
+                " required type ${default::class.simpleName?.let { getDefaultName(it) }}."
         )
     } catch (_: NumberFormatException) {
         error(
             "Value \"$result\" set for config parameter \"${keySequence(key)}\" is not of" +
-                " required type ${default::class.simpleName}."
+                " required type ${default::class.simpleName?.let { getDefaultName(it) }}."
         )
     }
+
+private fun getDefaultName(className: String): String = if (className == "EmptyList") {
+    "List"
+} else {
+    className
 }
 
 fun tryParseBasedOnDefault(result: String, defaultResult: Any): Any = when (defaultResult) {
@@ -46,7 +64,19 @@ fun tryParseBasedOnDefault(result: String, defaultResult: Any): Any = when (defa
         } else {
             throw ClassCastException()
         }
+
     is Double -> result.toDouble()
     is String -> result
     else -> throw ClassCastException()
 }
+
+private val PRIMITIVES: Set<KClass<out Any>> = setOf(
+    Int::class,
+    Boolean::class,
+    Float::class,
+    Double::class,
+    String::class,
+    Short::class,
+    Char::class,
+    Long::class
+)

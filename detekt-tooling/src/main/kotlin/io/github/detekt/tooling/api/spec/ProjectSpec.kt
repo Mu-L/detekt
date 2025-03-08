@@ -1,5 +1,6 @@
 package io.github.detekt.tooling.api.spec
 
+import io.github.detekt.tooling.api.AnalysisMode
 import java.nio.file.Path
 
 /**
@@ -9,8 +10,10 @@ interface ProjectSpec {
 
     /**
      * A base path to relativize paths. Mostly used for generating path in the output or report.
+     *
+     * It is always an absolute path.
      */
-    val basePath: Path?
+    val basePath: Path
 
     /**
      * Paths to analyze. Works with files and directories.
@@ -18,12 +21,7 @@ interface ProjectSpec {
     val inputPaths: Collection<Path>
 
     /**
-     * Globbing patterns to exclude sub paths of [inputPaths].
+     * The analysis mode used by detekt. See [AnalysisMode] for information about available analysis modes.
      */
-    val excludes: Collection<String>
-
-    /**
-     * Globbing patterns which apply after paths get excluded by [excludes].
-     */
-    val includes: Collection<String>
+    val analysisMode: AnalysisMode
 }

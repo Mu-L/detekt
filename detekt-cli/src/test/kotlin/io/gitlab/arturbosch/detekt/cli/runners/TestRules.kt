@@ -1,26 +1,40 @@
 package io.gitlab.arturbosch.detekt.cli.runners
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
 import io.gitlab.arturbosch.detekt.api.RuleSet
 import io.gitlab.arturbosch.detekt.api.RuleSetProvider
-import io.gitlab.arturbosch.detekt.api.Severity
+import io.gitlab.arturbosch.detekt.api.config
 import org.jetbrains.kotlin.psi.KtClass
 
 class TestProvider : RuleSetProvider {
-    override val ruleSetId: String = "test"
-    override fun instance(config: Config): RuleSet = RuleSet(ruleSetId, listOf(TestRule()))
+    override val ruleSetId = RuleSet.Id("test")
+    override fun instance(): RuleSet = RuleSet(
+        ruleSetId,
+        listOf(
+            ::TestRule,
+            ::TestRuleWithDeprecation,
+        )
+    )
 }
 
-class TestRule : Rule() {
-    override val issue = Issue("test", Severity.Minor, "", Debt.FIVE_MINS)
+internal class TestRule(config: Config) : Rule(config, "A failure") {
     override fun visitClass(klass: KtClass) {
         if (klass.name == "Poko") {
-            report(CodeSmell(issue, Entity.from(klass), issue.description))
+            report(Finding(Entity.from(klass), description))
         }
+    }
+}
+
+internal class TestRuleWithDeprecation(config: Config) : Rule(config, "A failure") {
+    @Suppress("unused")
+    @Deprecated("This is deprecated")
+    @Configuration("deprecated config")
+    private val deprecated: Int by config(0)
+    override fun visitClass(klass: KtClass) {
+        // no-op
     }
 }

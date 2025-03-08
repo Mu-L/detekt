@@ -1,141 +1,223 @@
 package io.gitlab.arturbosch.detekt.core.baseline
 
-import io.github.detekt.test.utils.NullPrintStream
 import io.github.detekt.test.utils.createTempDirectoryForTest
 import io.github.detekt.test.utils.resourceAsPath
-import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Finding
-import io.gitlab.arturbosch.detekt.api.SetupContext
-import io.gitlab.arturbosch.detekt.api.UnstableApi
-import io.gitlab.arturbosch.detekt.core.exists
-import io.mockk.every
-import io.mockk.mockk
+import io.gitlab.arturbosch.detekt.test.TestSetupContext
+import io.gitlab.arturbosch.detekt.test.createEntity
+import io.gitlab.arturbosch.detekt.test.createIssue
+import io.gitlab.arturbosch.detekt.test.createRuleInstance
 import org.assertj.core.api.Assertions.assertThat
-import org.spekframework.spek2.Spek
-import org.spekframework.spek2.style.specification.describe
-import java.io.PrintStream
-import java.net.URI
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Test
 import java.nio.file.Path
+import kotlin.io.path.copyTo
+import kotlin.io.path.deleteIfExists
 
-@OptIn(UnstableApi::class)
-class BaselineResultMappingSpec : Spek({
+class BaselineResultMappingSpec {
 
-    describe("a baseline result mapping") {
+    private val dir = createTempDirectoryForTest("baseline_format")
+    private val baselineFile = dir.resolve("baseline.xml")
+    private val existingBaselineFile = resourceAsPath("/baseline_feature/valid-baseline.xml")
+    private val issues = listOf(
+        createIssue(
+            ruleInstance = createRuleInstance("SomeIssue", "RuleSet"),
+            entity = createEntity(signature = "SomeSignature"),
+        ),
+        createIssue(
+            ruleId = "LongParameterList",
+            entity = createEntity(signature = "Signature")
+        ),
+        createIssue(
+            ruleId = "LongMethod",
+            entity = createEntity(signature = "Signature")
+        ),
+        createIssue(
+            ruleId = "FeatureEnvy",
+            entity = createEntity(signature = "Signature")
+        ),
+    )
 
-        val dir by memoized { createTempDirectoryForTest("baseline_format") }
-        val baselineFile by memoized { dir.resolve("baseline.xml") }
-        val existingBaselineFile by memoized { resourceAsPath("/baseline_feature/valid-baseline.xml") }
-        val finding by memoized {
-            val issue = mockk<Finding>()
-            every { issue.id }.returns("SomeIssueId")
-            every { issue.signature }.returns("SomeSignature")
-            issue
-        }
-        val findings by memoized { mapOf("RuleSet" to listOf(finding)) }
-
-        it("should not create a new baseline file when no findings occurred") {
-            val mapping = resultMapping(
-                baselineFile = baselineFile,
-                createBaseline = true,
-            )
-
-            mapping.transformFindings(emptyMap())
-
-            assertThat(baselineFile.exists()).isFalse()
-        }
-
-        it("should not update an existing baseline file when no findings occurred") {
-            val existing = Baseline.load(existingBaselineFile)
-            val mapping = resultMapping(
-                baselineFile = existingBaselineFile,
-                createBaseline = true,
-            )
-
-            mapping.transformFindings(emptyMap())
-
-            val changed = Baseline.load(existingBaselineFile)
-            assertThat(existing).isEqualTo(changed)
-        }
-
-        it("should not update an existing baseline file if option configured as false") {
-            val existing = Baseline.load(existingBaselineFile)
-            val mapping = resultMapping(
-                baselineFile = existingBaselineFile,
-                createBaseline = false,
-            )
-
-            mapping.transformFindings(findings)
-
-            val changed = Baseline.load(existingBaselineFile)
-            assertThat(existing).isEqualTo(changed)
-        }
-
-        it("should not update an existing baseline file if option is not configured") {
-            val existing = Baseline.load(existingBaselineFile)
-            val mapping = resultMapping(
-                baselineFile = existingBaselineFile,
-                createBaseline = null,
-            )
-
-            mapping.transformFindings(findings)
-
-            val changed = Baseline.load(existingBaselineFile)
-            assertThat(existing).isEqualTo(changed)
-        }
-
-        it("should not create a new baseline file if no file is configured") {
-            val mapping = resultMapping(
-                baselineFile = null,
-                createBaseline = false,
-            )
-
-            mapping.transformFindings(findings)
-
-            assertThat(baselineFile.exists()).isFalse()
-        }
-
-        it("should create a new baseline file if a file is configured") {
-            val mapping = resultMapping(
-                baselineFile = baselineFile,
-                createBaseline = true,
-            )
-
-            mapping.transformFindings(findings)
-
-            assertThat(baselineFile.exists()).isTrue()
-        }
-
-        it("should update an existing baseline file if a file is configured") {
-            val existing = Baseline.load(existingBaselineFile)
-            val mapping = resultMapping(
-
-                baselineFile = existingBaselineFile,
-                createBaseline = true,
-            )
-
-            mapping.transformFindings(findings)
-
-            val changed = Baseline.load(existingBaselineFile)
-            assertThat(existing).isNotEqualTo(changed)
-        }
+    @AfterEach
+    fun tearDown() {
+        baselineFile.deleteIfExists()
     }
-})
 
-@OptIn(UnstableApi::class)
-internal fun resultMapping(baselineFile: Path?, createBaseline: Boolean?) =
+    @Test
+    fun `should not create a new baseline file when no issues occurred`() {
+        val mapping = resultMapping(
+            baselineFile = baselineFile,
+            createBaseline = true,
+        )
+
+        mapping.transformIssues(emptyList())
+
+        assertThat(baselineFile).doesNotExist()
+    }
+
+    @Test
+    fun `should not update an existing baseline file if option configured as false`() {
+        val existing = DefaultBaseline.load(existingBaselineFile)
+        val mapping = resultMapping(
+            baselineFile = existingBaselineFile,
+            createBaseline = false,
+        )
+
+        mapping.transformIssues(issues)
+
+        val changed = DefaultBaseline.load(existingBaselineFile)
+        assertThat(changed).isEqualTo(existing)
+    }
+
+    @Test
+    fun `should not update an existing baseline file if option is not configured`() {
+        val existing = DefaultBaseline.load(existingBaselineFile)
+        val mapping = resultMapping(
+            baselineFile = existingBaselineFile,
+            createBaseline = null,
+        )
+
+        mapping.transformIssues(issues)
+
+        val changed = DefaultBaseline.load(existingBaselineFile)
+        assertThat(changed).isEqualTo(existing)
+    }
+
+    @Test
+    fun `should not create a new baseline file if no file is configured`() {
+        val mapping = resultMapping(
+            baselineFile = null,
+            createBaseline = false,
+        )
+
+        mapping.transformIssues(issues)
+
+        assertThat(baselineFile).doesNotExist()
+    }
+
+    @Test
+    fun `should create a new baseline file if a file is configured`() {
+        val mapping = resultMapping(
+            baselineFile = baselineFile,
+            createBaseline = true,
+        )
+
+        mapping.transformIssues(issues)
+
+        assertThat(baselineFile).exists()
+    }
+
+    @Test
+    fun `should update an existing baseline file if a file is configured`() {
+        existingBaselineFile.copyTo(baselineFile)
+        val existing = DefaultBaseline.load(baselineFile)
+        val mapping = resultMapping(
+            baselineFile = baselineFile,
+            createBaseline = true,
+        )
+
+        mapping.transformIssues(issues)
+
+        val changed = DefaultBaseline.load(baselineFile)
+        assertThat(changed).isNotEqualTo(existing)
+    }
+
+    @Test
+    fun `returns a filtered issues list when the baseline exists`() {
+        existingBaselineFile.copyTo(baselineFile)
+
+        val mapping = resultMapping(
+            baselineFile = baselineFile,
+            createBaseline = true,
+        )
+
+        val filtered = mapping.filterByBaseline(baselineFile, issues)
+
+        assertThat(filtered).isNotEqualTo(issues)
+    }
+
+    @Test
+    fun `returns the same issues list when the baseline doesn't exist`() {
+        val mapping = resultMapping(
+            baselineFile = baselineFile,
+            createBaseline = false,
+        )
+
+        val filtered = mapping.filterByBaseline(baselineFile, issues)
+
+        assertThat(filtered).isEqualTo(issues)
+    }
+
+    @Test
+    fun `doesn't create a baseline file without issues`() {
+        val mapping = resultMapping(
+            baselineFile = baselineFile,
+            createBaseline = false,
+        )
+
+        mapping.createOrUpdate(baselineFile, emptyList())
+
+        assertThat(baselineFile).doesNotExist()
+    }
+
+    @Test
+    fun `creates on top of an existing a baseline file without issues`() {
+        existingBaselineFile.copyTo(baselineFile)
+        val mapping = resultMapping(
+            baselineFile = baselineFile,
+            createBaseline = true,
+        )
+
+        mapping.createOrUpdate(baselineFile, emptyList())
+
+        assertThat(baselineFile).hasContent(
+            """
+                <?xml version="1.0" ?>
+                <SmellBaseline>
+                  <ManuallySuppressedIssues>
+                    <ID>LongParameterList:TestFile.kt:Signature</ID>
+                    <ID>LongMethod:TestFile.kt:Signature</ID>
+                  </ManuallySuppressedIssues>
+                  <CurrentIssues/>
+                </SmellBaseline>
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `creates on top of an existing a baseline file with issues`() {
+        existingBaselineFile.copyTo(baselineFile)
+        val mapping = resultMapping(
+            baselineFile = baselineFile,
+            createBaseline = true,
+        )
+
+        mapping.createOrUpdate(baselineFile, listOf(createIssue()))
+
+        assertThat(baselineFile).hasContent(
+            """
+                <?xml version="1.0" ?>
+                <SmellBaseline>
+                  <ManuallySuppressedIssues>
+                    <ID>LongParameterList:TestFile.kt:Signature</ID>
+                    <ID>LongMethod:TestFile.kt:Signature</ID>
+                  </ManuallySuppressedIssues>
+                  <CurrentIssues>
+                    <ID>TestSmell/id:TestFile.kt:TestEntitySignature</ID>
+                  </CurrentIssues>
+                </SmellBaseline>
+            """.trimIndent()
+        )
+    }
+}
+
+private fun resultMapping(baselineFile: Path?, createBaseline: Boolean?) =
     BaselineResultMapping().apply {
-        init(object : SetupContext {
-            override val configUris: Collection<URI> = mockk()
-            override val config: Config = mockk()
-            override val outputChannel: PrintStream = NullPrintStream()
-            override val errorChannel: PrintStream = NullPrintStream()
-            override val properties: MutableMap<String, Any?> = mutableMapOf(
-                DETEKT_BASELINE_PATH_KEY to baselineFile,
-                DETEKT_BASELINE_CREATION_KEY to createBaseline
+        init(
+            TestSetupContext(
+                properties = mapOf(
+                    DETEKT_BASELINE_PATH_KEY to baselineFile,
+                    DETEKT_BASELINE_CREATION_KEY to createBaseline,
+                )
             )
-
-            override fun register(key: String, value: Any) {
-                properties[key] = value
-            }
-        })
+        )
     }

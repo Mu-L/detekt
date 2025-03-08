@@ -1,13 +1,11 @@
 package io.gitlab.arturbosch.detekt.rules.coroutines
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.internal.RequiresTypeResolution
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
@@ -28,13 +26,14 @@ import org.jetbrains.kotlin.resolve.BindingContext.DELEGATED_PROPERTY_RESOLVED_C
 import org.jetbrains.kotlin.resolve.BindingContext.LOOP_RANGE_HAS_NEXT_RESOLVED_CALL
 import org.jetbrains.kotlin.resolve.BindingContext.LOOP_RANGE_ITERATOR_RESOLVED_CALL
 import org.jetbrains.kotlin.resolve.BindingContext.LOOP_RANGE_NEXT_RESOLVED_CALL
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
 
 /*
  * Based on code from Kotlin project:
  * https://github.com/JetBrains/kotlin/blob/v1.3.61/idea/src/org/jetbrains/kotlin/idea/inspections/RedundantSuspendModifierInspection.kt
  */
+
 /**
  * `suspend` modifier should only be used where needed, otherwise the function can only be used from other suspending
  * functions. This needlessly restricts use of the function and should be avoided by removing the `suspend` modifier
@@ -53,40 +52,39 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
  * </compliant>
  *
  */
-@RequiresTypeResolution
-class RedundantSuspendModifier(config: Config) : Rule(config) {
-
-    override val issue = Issue(
-        "RedundantSuspendModifier",
-        Severity.Minor,
-        "`suspend` modifier is only needed for functions that contain suspending calls",
-        Debt.FIVE_MINS
-    )
+@ActiveByDefault(since = "1.21.0")
+class RedundantSuspendModifier(config: Config) :
+    Rule(
+        config,
+        "The `suspend` modifier is only needed for functions that contain suspending calls."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitNamedFunction(function: KtNamedFunction) {
-        if (bindingContext == BindingContext.EMPTY) return
         val suspendModifier = function.modifierList?.getModifier(KtTokens.SUSPEND_KEYWORD) ?: return
         if (!function.hasBody()) return
-        if (function.hasModifier(KtTokens.OVERRIDE_KEYWORD)) return
+        if (function.hasModifier(KtTokens.OVERRIDE_KEYWORD) || function.hasModifier(KtTokens.ACTUAL_KEYWORD)) return
 
         val descriptor = bindingContext[BindingContext.FUNCTION, function] ?: return
         if (descriptor.modality == Modality.OPEN) return
 
         if (!function.anyDescendantOfType<KtExpression> { it.hasSuspendCalls() }) {
-            report(CodeSmell(issue, Entity.from(suspendModifier), "Function has redundant `suspend` modifier."))
+            report(Finding(Entity.from(suspendModifier), "Function has redundant `suspend` modifier."))
         }
     }
 
-    private fun KtExpression.isValidCandidateExpression(): Boolean {
-        return when (this) {
+    private fun KtExpression.isValidCandidateExpression(): Boolean =
+        when (this) {
             is KtOperationReferenceExpression, is KtForExpression, is KtProperty, is KtNameReferenceExpression -> true
             else -> {
                 val parent = parent
-                if (parent is KtCallExpression && parent.calleeExpression == this) true
-                else this is KtCallExpression && this.calleeExpression is KtCallExpression
+                if (parent is KtCallExpression && parent.calleeExpression == this) {
+                    true
+                } else {
+                    this is KtCallExpression && this.calleeExpression is KtCallExpression
+                }
             }
         }
-    }
 
     private fun KtExpression.hasSuspendCalls(): Boolean {
         if (!isValidCandidateExpression()) return false
@@ -116,8 +114,9 @@ class RedundantSuspendModifier(config: Config) : Rule(config) {
             }
             else -> {
                 val resolvedCall = getResolvedCall(bindingContext)
-                if ((resolvedCall?.resultingDescriptor as? FunctionDescriptor)?.isSuspend == true) true
-                else {
+                if ((resolvedCall?.resultingDescriptor as? FunctionDescriptor)?.isSuspend == true) {
+                    true
+                } else {
                     val propertyDescriptor = resolvedCall?.resultingDescriptor as? PropertyDescriptor
                     val s = propertyDescriptor?.fqNameSafe?.asString()
                     s?.startsWith("kotlin.coroutines.") == true && s.endsWith(".coroutineContext")

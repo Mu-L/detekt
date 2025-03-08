@@ -1,18 +1,13 @@
 package io.gitlab.arturbosch.detekt.rules.complexity
 
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
+import io.gitlab.arturbosch.detekt.api.Configuration
 import io.gitlab.arturbosch.detekt.api.DetektVisitor
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
-import io.gitlab.arturbosch.detekt.api.Metric
+import io.gitlab.arturbosch.detekt.api.Finding
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
-import io.gitlab.arturbosch.detekt.api.ThresholdedCodeSmell
 import io.gitlab.arturbosch.detekt.api.config
-import io.gitlab.arturbosch.detekt.api.internal.ActiveByDefault
-import io.gitlab.arturbosch.detekt.api.internal.Configuration
-import io.gitlab.arturbosch.detekt.rules.isUsedForNesting
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtContainerNodeForControlStructureBody
 import org.jetbrains.kotlin.psi.KtIfExpression
@@ -21,6 +16,7 @@ import org.jetbrains.kotlin.psi.KtLoopExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtTryExpression
 import org.jetbrains.kotlin.psi.KtWhenExpression
+import org.jetbrains.kotlin.psi.psiUtil.getCallNameExpression
 
 /**
  * This rule reports excessive nesting depth in functions. Excessively nested code becomes harder to read and increases
@@ -29,43 +25,36 @@ import org.jetbrains.kotlin.psi.KtWhenExpression
  * Prefer extracting the nested code into well-named functions to make it easier to understand.
  */
 @ActiveByDefault(since = "1.0.0")
-class NestedBlockDepth(config: Config = Config.empty) : Rule(config) {
+class NestedBlockDepth(config: Config) : Rule(
+    config,
+    "Excessive nesting leads to hidden complexity. Prefer extracting code to make it easier to understand."
+) {
 
-    override val issue = Issue(
-        "NestedBlockDepth",
-        Severity.Maintainability,
-        "Excessive nesting leads to hidden complexity. " +
-            "Prefer extracting code to make it easier to understand.",
-        Debt.TWENTY_MINS
-    )
-
-    @Configuration("the nested depth required to trigger rule")
-    private val threshold: Int by config(defaultValue = 4)
+    @Configuration("The maximum allowed nested block depth for a function")
+    private val allowedDepth: Int by config(defaultValue = 4)
 
     override fun visitNamedFunction(function: KtNamedFunction) {
-        val visitor = FunctionDepthVisitor(threshold)
+        val visitor = FunctionDepthVisitor(allowedDepth)
         visitor.visitNamedFunction(function)
         if (visitor.isTooDeep) {
             @Suppress("UnsafeCallOnNullableType")
             report(
-                ThresholdedCodeSmell(
-                    issue,
+                Finding(
                     Entity.atName(function),
-                    Metric("SIZE", visitor.maxDepth, threshold),
                     "Function ${function.name} is nested too deeply."
                 )
             )
         }
     }
 
-    private class FunctionDepthVisitor(val threshold: Int) : DetektVisitor() {
+    private class FunctionDepthVisitor(val allowedDepth: Int) : DetektVisitor() {
 
         var depth = 0
         var maxDepth = 0
         var isTooDeep = false
         private fun inc() {
             depth++
-            if (depth >= threshold) {
+            if (depth > allowedDepth) {
                 isTooDeep = true
                 if (depth > maxDepth) maxDepth = depth
             }
@@ -121,5 +110,8 @@ class NestedBlockDepth(config: Config = Config.empty) : Rule(config) {
                 }
             }
         }
+
+        private fun KtCallExpression.isUsedForNesting(): Boolean =
+            getCallNameExpression()?.text in setOf("run", "let", "apply", "with", "use", "forEach")
     }
 }

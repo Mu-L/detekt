@@ -13,7 +13,7 @@ interface Extension {
     /**
      * Name of the extension.
      */
-    val id: String get() = javaClass.simpleName
+    val id: String
 
     /**
      * Is used to run extensions in a specific order.
@@ -22,17 +22,8 @@ interface Extension {
     val priority: Int get() = -1
 
     /**
-     * Allows to read any or even user defined properties from the detekt yaml config
-     * to setup this extension.
-     */
-    fun init(config: Config) {
-        // implement for setup code
-    }
-
-    /**
      * Setup extension by querying common paths and config options.
      */
-    @OptIn(UnstableApi::class)
     fun init(context: SetupContext) {
         // implement for setup code
     }

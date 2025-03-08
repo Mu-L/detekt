@@ -1,0 +1,57 @@
+name: Build and Deploy Website
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  DEVELOCITY_ACCESS_KEY: ${{ secrets.GRADLE_ENTERPRISE_ACCESS_KEY }}
+
+permissions:
+  contents: write  # for JamesIves/github-pages-deploy-action to push changes in repo
+
+jobs:
+  build-detekt-docs:
+    if: github.repository == 'detekt/detekt'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Setup Java
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4
+        with:
+          java-version: 21
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@94baf225fe0a508e581a564467443d0e2379123b # v4
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+      - name: Setup Node
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
+        with:
+          node-version: 22
+          cache: 'yarn'
+          cache-dependency-path: 'website/yarn.lock'
+
+      - name: Run generateWebsite
+        run: ./gradlew :detekt-generator:generateWebsite
+
+      - name: Install Yarn Dependencies
+        working-directory: website/
+        run: yarn install --frozen-lockfile
+
+      - name: Build the Detekt Website
+        working-directory: website/
+        run: yarn build
+
+      - name: Deploy GitHub Pages (only on main)
+        uses: JamesIves/github-pages-deploy-action@6c2d9db40f9296374acc17b90404b6e8864128c8 # v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          branch: gh-pages
+          folder: website/build/

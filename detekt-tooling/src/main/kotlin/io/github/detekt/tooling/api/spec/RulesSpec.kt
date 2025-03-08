@@ -1,7 +1,7 @@
 package io.github.detekt.tooling.api.spec
 
-import io.gitlab.arturbosch.detekt.api.RuleId
-import io.gitlab.arturbosch.detekt.api.RuleSetId
+import io.gitlab.arturbosch.detekt.api.RuleSet
+import io.gitlab.arturbosch.detekt.api.Severity
 
 interface RulesSpec {
 
@@ -11,40 +11,24 @@ interface RulesSpec {
     val activateAllRules: Boolean
 
     /**
-     * Sets the policy for allowed max issues found during the analysis.
+     * Sets the policy to handle issues found during the analysis.
      */
-    val maxIssuePolicy: MaxIssuePolicy
+    val failurePolicy: FailurePolicy
 
     /**
-     * Issues which were corrected should not be taken into account for calculating the max issue threshold.
+     * Policy to decide if detekt throws an error.
      */
-    val excludeCorrectable: Boolean
-
-    /**
-     * Policy on how many issues are allowed before detekt throws an error.
-     */
-    sealed class MaxIssuePolicy {
+    sealed class FailurePolicy {
 
         /**
-         * Marker that MaxIssuePolicy should be read from the config file when available.
-         * Else it defaults to [NoneAllowed].
+         * Any number of issues is allowed. The build never fails due to detekt issues.
          */
-        object NonSpecified : MaxIssuePolicy()
+        data object NeverFail : FailurePolicy()
 
         /**
-         * Always return exit code 0 on found issues.
+         * No issue at or above the specified severity is allowed.
          */
-        object AllowAny : MaxIssuePolicy()
-
-        /**
-         * Never return successfully (code 0) on issues in codebase.
-         */
-        object NoneAllowed : MaxIssuePolicy()
-
-        /**
-         * Define a specific amount of issues which are allowed to find before returning non-zero exit code.
-         */
-        class AllowAmount(val amount: Int) : MaxIssuePolicy()
+        data class FailOnSeverity(val minSeverity: Severity) : FailurePolicy()
     }
 
     /**
@@ -67,11 +51,16 @@ interface RulesSpec {
         /**
          * Run all loaded rules provided by [io.gitlab.arturbosch.detekt.api.RuleSetProvider]
          */
-        object NoRestrictions : RunPolicy()
+        data object NoRestrictions : RunPolicy()
+
+        /**
+         * Exclude all default rule sets provided by detekt.
+         */
+        data object DisableDefaultRuleSets : RunPolicy()
 
         /**
          * Run a single rule.
          */
-        class RestrictToSingleRule(val id: Pair<RuleSetId, RuleId>) : RunPolicy()
+        class RestrictToSingleRule(val ruleSetId: RuleSet.Id, val ruleId: String) : RunPolicy()
     }
 }

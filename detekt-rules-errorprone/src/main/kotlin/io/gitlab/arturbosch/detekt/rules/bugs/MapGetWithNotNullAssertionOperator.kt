@@ -1,16 +1,15 @@
 package io.gitlab.arturbosch.detekt.rules.bugs
 
-import io.gitlab.arturbosch.detekt.api.CodeSmell
+import io.gitlab.arturbosch.detekt.api.ActiveByDefault
 import io.gitlab.arturbosch.detekt.api.Config
-import io.gitlab.arturbosch.detekt.api.Debt
 import io.gitlab.arturbosch.detekt.api.Entity
-import io.gitlab.arturbosch.detekt.api.Issue
+import io.gitlab.arturbosch.detekt.api.Finding
+import io.gitlab.arturbosch.detekt.api.RequiresFullAnalysis
 import io.gitlab.arturbosch.detekt.api.Rule
-import io.gitlab.arturbosch.detekt.api.Severity
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtPostfixExpression
-import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
 
 /**
@@ -42,29 +41,26 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
  * map.getOrElse("key", { "" })
  * </compliant>
  */
-class MapGetWithNotNullAssertionOperator(config: Config) : Rule(config) {
-
-    override val issue: Issue =
-        Issue(
-            "MapGetWithNotNullAssertionOperator",
-            Severity.CodeSmell,
-            "map.get() with not-null assertion operator (!!) can result in a NullPointerException. " +
-                "Consider usage of map.getValue(), map.getOrDefault() or map.getOrElse() instead.",
-            Debt.FIVE_MINS
-        )
+@ActiveByDefault(since = "1.21.0")
+class MapGetWithNotNullAssertionOperator(config: Config) :
+    Rule(
+        config,
+        "map.get() with not-null assertion operator (!!) can result in a NullPointerException. " +
+            "Consider usage of map.getValue(), map.getOrDefault() or map.getOrElse() instead."
+    ),
+    RequiresFullAnalysis {
 
     override fun visitPostfixExpression(expression: KtPostfixExpression) {
         if (expression.operationToken == KtTokens.EXCLEXCL && expression.isMapGet()) {
-            report(CodeSmell(issue, Entity.from(expression), "map.get() with not-null assertion operator (!!)"))
+            report(Finding(Entity.from(expression), "map.get() with not-null assertion operator (!!)"))
         }
         super.visitPostfixExpression(expression)
     }
 
-    private fun KtPostfixExpression.isMapGet(): Boolean {
-        return this
+    private fun KtPostfixExpression.isMapGet(): Boolean =
+        this
             .baseExpression
             .getResolvedCall(bindingContext)
             ?.resultingDescriptor
             ?.fqNameSafe == FqName("kotlin.collections.Map.get")
-    }
 }
